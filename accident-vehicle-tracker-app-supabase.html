@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fleet Recovery — Accident Vehicle Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --canvas:#EEF1F4; --surface:#FFFFFF; --surface-2:#F7F9FB;
+    --ink:#17202E; --steel:#5B6675; --line:#DCE1E7;
+    --navy:#223046; --navy-2:#2C3E58;
+    --amber:#E8A200; --plate:#F4C20D;
+    --green:#1B8A5A; --green-bg:#E6F4EC;
+    --red:#C63A2E; --red-bg:#FBE9E7;
+    --blue:#2F6FB0; --blue-bg:#E7F0F9;
+    --teal:#0E8A86; --teal-bg:#E2F3F2;
+    --shadow:0 1px 2px rgba(23,32,46,.06),0 6px 20px rgba(23,32,46,.06);
+    --radius:14px;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'Inter',system-ui,sans-serif;background:var(--canvas);color:var(--ink);
+    -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.45;
+  }
+  .num{font-variant-numeric:tabular-nums}
+  button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  input,select{font-family:inherit;font-size:14px}
+  ::selection{background:var(--amber);color:#1a1a1a}
+
+  /* ---------- shell ---------- */
+  .app{display:grid;grid-template-columns:224px 1fr;min-height:100vh}
+  .side{
+    background:var(--navy);color:#C6D0DD;display:flex;flex-direction:column;
+    padding:20px 14px;position:sticky;top:0;height:100vh;
+  }
+  .brand{display:flex;align-items:center;gap:10px;padding:4px 8px 20px;margin-bottom:6px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .brand .mark{width:34px;height:34px;border-radius:9px;background:var(--amber);display:grid;place-items:center;flex:none;
+    box-shadow:inset 0 -2px 0 rgba(0,0,0,.15)}
+  .brand .mark svg{width:20px;height:20px}
+  .brand h1{font-family:'Archivo';font-size:15px;font-weight:800;letter-spacing:-.2px;color:#fff;line-height:1.05}
+  .brand small{display:block;font-family:'Inter';font-weight:500;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:#7E8BA0;margin-top:2px}
+  .nav{display:flex;flex-direction:column;gap:2px;margin-top:16px}
+  .nav button{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:9px;color:#AEB9C8;font-weight:600;font-size:13.5px;transition:.15s;text-align:left;width:100%}
+  .nav button svg{width:18px;height:18px;flex:none;opacity:.85}
+  .nav button:hover{background:rgba(255,255,255,.06);color:#fff}
+  .nav button.active{background:var(--amber);color:#1a1400;box-shadow:inset 0 -2px 0 rgba(0,0,0,.15)}
+  .nav button.active svg{opacity:1}
+  .side .spacer{flex:1}
+  .side .io{display:flex;gap:6px;margin-top:10px}
+  .side .io button{flex:1;font-size:11.5px;font-weight:600;color:#9AA6B6;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.1);text-align:center}
+  .side .io button:hover{color:#fff;border-color:rgba(255,255,255,.25)}
+  .savepill{font-size:11px;color:#7E8BA0;text-align:center;margin-top:12px;transition:.3s;height:14px}
+  .savepill.on{color:var(--plate)}
+
+  /* ---------- main ---------- */
+  .main{padding:26px 34px 60px;max-width:1180px}
+  .topbar{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:24px;flex-wrap:wrap}
+  .topbar .h{font-family:'Archivo';font-size:25px;font-weight:800;letter-spacing:-.5px}
+  .topbar .sub{color:var(--steel);font-size:13px;margin-top:3px}
+  .btn{display:inline-flex;align-items:center;gap:7px;background:var(--navy);color:#fff;font-weight:600;font-size:13.5px;
+    padding:10px 16px;border-radius:10px;box-shadow:var(--shadow);transition:.15s}
+  .btn:hover{background:var(--navy-2);transform:translateY(-1px)}
+  .btn svg{width:16px;height:16px}
+  .btn.amber{background:var(--amber);color:#1a1400}
+  .btn.ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line);box-shadow:none}
+  .btn.ghost:hover{border-color:var(--steel)}
+  .btn.sm{padding:7px 12px;font-size:12.5px}
+
+  /* ---------- kpi ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px}
+  .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 17px;box-shadow:var(--shadow);position:relative;overflow:hidden}
+  .kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--amber)}
+  .kpi.g::before{background:var(--green)} .kpi.r::before{background:var(--red)} .kpi.b::before{background:var(--blue)}
+  .kpi .lab{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--steel)}
+  .kpi .val{font-family:'Archivo';font-size:26px;font-weight:800;letter-spacing:-.5px;margin-top:7px;line-height:1}
+  .kpi .val.money{font-size:23px}
+  .kpi .meta{font-size:12px;color:var(--steel);margin-top:6px}
+
+  .grid2{display:grid;grid-template-columns:1.15fr .85fr;gap:18px;align-items:start}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .card .ch{display:flex;align-items:center;justify-content:space-between;padding:15px 18px;border-bottom:1px solid var(--line)}
+  .card .ch h3{font-family:'Archivo';font-size:14.5px;font-weight:700}
+  .card .ch .cnt{font-size:12px;color:var(--steel);font-weight:600}
+
+  /* attention list */
+  .att{display:flex;flex-direction:column}
+  .att .row{display:flex;align-items:center;gap:12px;padding:12px 18px;border-bottom:1px solid var(--surface-2)}
+  .att .row:last-child{border-bottom:none}
+  .att .ic{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;flex:none}
+  .att .ic svg{width:16px;height:16px}
+  .att .ic.amber{background:#FDF3DE;color:#946400} .att .ic.red{background:var(--red-bg);color:var(--red)}
+  .att .tx{flex:1;min-width:0}
+  .att .tx b{font-weight:600;font-size:13.5px} .att .tx span{display:block;color:var(--steel);font-size:12px}
+  .att .empty{padding:26px 18px;text-align:center;color:var(--steel);font-size:13px}
+
+  /* vehicle table */
+  .vtable{display:flex;flex-direction:column}
+  .vtable .vr{display:grid;grid-template-columns:118px 1fr auto;gap:14px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--surface-2);cursor:pointer;transition:.12s}
+  .vtable .vr:last-child{border-bottom:none}
+  .vtable .vr:hover{background:var(--surface-2)}
+  .vtable .vmid b{font-weight:600;font-size:13.5px}
+  .vtable .vmid span{display:block;color:var(--steel);font-size:12px}
+  .vtable .vright{text-align:right}
+  .vtable .vright .due{font-family:'Space Mono';font-weight:700;font-size:13.5px}
+  .vtable .vright .due.zero{color:var(--green)} .vtable .vright .due.owed{color:var(--red)}
+  .vtable .vright small{display:block;color:var(--steel);font-size:11px;margin-top:2px}
+
+  /* plate */
+  .plate{font-family:'Space Mono','Archivo';font-weight:700;background:var(--plate);color:#141414;
+    border:1.5px solid #141414;border-radius:5px;padding:3px 8px;font-size:12.5px;letter-spacing:.5px;
+    display:inline-flex;align-items:center;justify-content:center;box-shadow:0 1px 0 rgba(0,0,0,.25);white-space:nowrap}
+  .plate.big{font-size:19px;padding:7px 14px;border-radius:7px;border-width:2px}
+
+  /* chips */
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:20px;white-space:nowrap}
+  .chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+  .chip.slate{background:#EDF0F3;color:#5B6675} .chip.amber{background:#FDF3DE;color:#946400}
+  .chip.blue{background:var(--blue-bg);color:var(--blue)} .chip.teal{background:var(--teal-bg);color:var(--teal)}
+  .chip.red{background:var(--red-bg);color:var(--red)} .chip.green{background:var(--green-bg);color:var(--green)}
+
+  /* ---------- detail ---------- */
+  .back{display:inline-flex;align-items:center;gap:6px;color:var(--steel);font-weight:600;font-size:13px;margin-bottom:16px}
+  .back:hover{color:var(--ink)}
+  .dhead{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+  .dhead .model{font-family:'Archivo';font-size:23px;font-weight:800;letter-spacing:-.4px}
+  .dcust{color:var(--steel);font-size:13.5px;margin-bottom:20px}
+  .dcust b{color:var(--ink);font-weight:600}
+
+  .timeline{display:flex;gap:0;margin:0 0 22px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 8px;box-shadow:var(--shadow);overflow-x:auto}
+  .tstep{flex:1;min-width:110px;text-align:center;position:relative;padding:0 6px}
+  .tstep::before{content:"";position:absolute;top:11px;left:-50%;width:100%;height:2px;background:var(--line)}
+  .tstep:first-child::before{display:none}
+  .tstep.done::before{background:var(--green)}
+  .tdot{width:22px;height:22px;border-radius:50%;background:#fff;border:2px solid var(--line);margin:0 auto 8px;position:relative;z-index:1;display:grid;place-items:center}
+  .tstep.done .tdot{background:var(--green);border-color:var(--green)}
+  .tstep.done .tdot svg{width:12px;height:12px;color:#fff}
+  .tstep .tlab{font-size:11px;font-weight:600;color:var(--steel);text-transform:uppercase;letter-spacing:.04em}
+  .tstep .tdate{font-size:12.5px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums}
+  .tstep.pending .tdate{color:var(--amber)}
+
+  .fin{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+  .fcard{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:15px 16px;box-shadow:var(--shadow)}
+  .fcard .lab{font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--steel)}
+  .fcard .v{font-family:'Space Mono';font-weight:700;font-size:20px;margin-top:6px;letter-spacing:-.5px}
+  .fcard .v.green{color:var(--green)} .fcard .v.red{color:var(--red)}
+  .bar{height:7px;border-radius:6px;background:var(--surface-2);overflow:hidden;margin-top:11px}
+  .bar i{display:block;height:100%;border-radius:6px;background:var(--amber)}
+  .fcard .sub{font-size:11.5px;color:var(--steel);margin-top:7px}
+
+  /* tabs */
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:24px 0 0}
+  .tabs button{padding:11px 15px;font-weight:600;font-size:13.5px;color:var(--steel);border-bottom:2px solid transparent;margin-bottom:-1px}
+  .tabs button.active{color:var(--ink);border-color:var(--amber)}
+  .tabs button:hover{color:var(--ink)}
+  .tabwrap{background:var(--surface);border:1px solid var(--line);border-top:none;border-radius:0 0 var(--radius) var(--radius);box-shadow:var(--shadow)}
+  .tabhead{display:flex;justify-content:flex-end;padding:12px 16px;border-bottom:1px solid var(--surface-2)}
+  .lrow{display:grid;gap:12px;align-items:center;padding:13px 16px;border-bottom:1px solid var(--surface-2);font-size:13.5px}
+  .lrow:last-child{border-bottom:none}
+  .lrow .mono{font-family:'Space Mono';font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
+  .lrow .muted{color:var(--steel);font-size:12px}
+  .lrow .del{color:var(--steel);opacity:0;transition:.12s;justify-self:end}
+  .lrow:hover .del{opacity:1} .lrow .del:hover{color:var(--red)}
+  .lrow .del svg{width:15px;height:15px}
+  .lempty{padding:30px 16px;text-align:center;color:var(--steel);font-size:13px}
+  .paytag{font-size:11px;font-weight:600;padding:2px 8px;border-radius:12px}
+  .paytag.cust{background:var(--blue-bg);color:var(--blue)} .paytag.ins{background:#F0EAF7;color:#6B3FA0}
+  .doclink{color:var(--blue);font-weight:600;text-decoration:none} .doclink:hover{text-decoration:underline}
+
+  /* ---------- modal ---------- */
+  .scrim{position:fixed;inset:0;background:rgba(23,32,46,.5);backdrop-filter:blur(2px);display:grid;place-items:center;padding:20px;z-index:50;animation:fade .15s}
+  @keyframes fade{from{opacity:0}}
+  .modal{background:var(--surface);border-radius:16px;width:100%;max-width:600px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.3);animation:pop .18s}
+  @keyframes pop{from{transform:translateY(8px) scale(.98);opacity:0}}
+  .modal .mh{display:flex;align-items:center;justify-content:space-between;padding:18px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--surface)}
+  .modal .mh h3{font-family:'Archivo';font-size:17px;font-weight:800}
+  .modal .mh .x{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;color:var(--steel)}
+  .modal .mh .x:hover{background:var(--surface-2);color:var(--ink)}
+  .mbody{padding:20px 22px}
+  .fgrid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .field{display:flex;flex-direction:column;gap:5px}
+  .field.full{grid-column:1/-1}
+  .field label{font-size:12px;font-weight:600;color:var(--steel)}
+  .field input,.field select{padding:9px 11px;border:1px solid var(--line);border-radius:9px;background:var(--surface-2);transition:.12s}
+  .field input:focus,.field select:focus{outline:none;border-color:var(--amber);background:#fff;box-shadow:0 0 0 3px rgba(232,162,0,.15)}
+  .mfoot{display:flex;justify-content:flex-end;gap:10px;padding:16px 22px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--surface)}
+
+  .mobtoggle{display:none}
+  @media(max-width:900px){
+    .kpis{grid-template-columns:1fr 1fr} .grid2{grid-template-columns:1fr} .fin{grid-template-columns:1fr}
+  }
+  @media(max-width:720px){
+    .app{grid-template-columns:1fr}
+    .side{position:fixed;left:0;top:0;bottom:0;width:230px;transform:translateX(-100%);transition:.22s;z-index:60}
+    .side.open{transform:none}
+    .main{padding:18px 16px 60px}
+    .mobtoggle{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:10px;background:var(--surface);border:1px solid var(--line);margin-bottom:14px}
+    .fgrid{grid-template-columns:1fr}
+    .topbar .h{font-size:21px}
+  }
+  @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side">
+    <div class="brand">
+      <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#1a1400" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18.5" cy="18.5" r="2"/></svg></div>
+      <div><h1>Fleet Recovery</h1><small>Accident Tracker</small></div>
+    </div>
+    <nav class="nav" id="nav">
+      <button data-view="dashboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg> Dashboard</button>
+      <button data-view="vehicles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7"/><circle cx="5.5" cy="18.5" r="2"/><circle cx="18.5" cy="18.5" r="2"/></svg> Vehicles</button>
+    </nav>
+    <div class="spacer"></div>
+    <div class="io">
+      <button onclick="exportData()">Export</button>
+      <button onclick="importData()">Import</button>
+    </div>
+    <div class="savepill" id="savepill"></div>
+    <button id="signout" onclick="doSignOut()" style="display:none;margin-top:8px;width:100%;font-size:11.5px;font-weight:600;color:#9AA6B6;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,.1)">Sign out</button>
+  </aside>
+
+  <main class="main">
+    <button class="mobtoggle" onclick="document.getElementById('side').classList.toggle('open')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg></button>
+    <div id="view"></div>
+  </main>
+</div>
+<div id="modal-root"></div>
+<input type="file" id="importfile" accept="application/json" style="display:none">
+
+<script>
+/* ============ CONFIG — paste your two Supabase values here ============ */
+const SUPABASE_URL='YOUR_SUPABASE_URL';https://ilhgyawcycxzxfiyezlo.supabase.co        // e.g. https://abcdefg.supabase.co
+const SUPABASE_KEY='YOUR_SUPABASE_ANON_KEY';sb_publishable_vjYM_9AAdbRp-MY4yxJetw_WX1A-bO3   // the "anon public" key
+const SB=(window.supabase && SUPABASE_URL && SUPABASE_URL.indexOf('YOUR_')<0)
+  ? window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY) : null;
+
+/* ============ state & persistence ============ */
+const KEY='avt_data_v1';
+const STATUSES=["Vehicle In","Documents Pending","Awaiting Approval","Approved - Repair Started","Parts Ordered","Under Repair","Ready for Billing","Billed","Payment Pending","Closed / Delivered"];
+const STATUS_CLASS={"Vehicle In":"slate","Documents Pending":"slate","Awaiting Approval":"amber","Approved - Repair Started":"blue","Parts Ordered":"blue","Under Repair":"blue","Ready for Billing":"teal","Billed":"teal","Payment Pending":"red","Closed / Delivered":"green"};
+
+let state={view:'dashboard',vid:null,tab:'orders',data:{vehicles:[]}};
+
+function seed(){
+  return {vehicles:[
+    {id:id(),job:"AV-2026-001",reg:"OD 02 AB 1234",model:"Tata 407",customer:"Ramesh Transport",phone:"98765 43210",insurer:"ICICI Lombard",policy:"POL-123",claim:"CLM-456",claimType:"Own Damage",entry:"2026-07-05",docs:"2026-07-07",permission:"2026-07-12",expDelivery:"2026-07-25",actDelivery:"",status:"Under Repair",estimate:185000,billed:50000,remarks:"",
+      orders:[{id:id(),item:"Front bumper assembly",vendor:"AutoParts Co",amount:25000,date:"2026-07-08"},{id:id(),item:"Headlight (LH+RH)",vendor:"AutoParts Co",amount:18000,date:"2026-07-09"}],
+      payments:[{id:id(),payer:"Insurance",amount:30000,date:"2026-07-15",mode:"NEFT",ref:"NEFT-222"}],
+      documents:[{id:id(),type:"RC",link:"",date:"2026-07-07"},{id:id(),type:"Before Photos",link:"",date:"2026-07-07"}]},
+    {id:id(),job:"AV-2026-002",reg:"OD 08 XY 9988",model:"Ashok Leyland 1616",customer:"Sunrise Logistics",phone:"98123 45678",insurer:"Bajaj Allianz",policy:"POL-789",claim:"CLM-321",claimType:"Own Damage",entry:"2026-07-10",docs:"2026-07-11",permission:"",expDelivery:"",actDelivery:"",status:"Awaiting Approval",estimate:240000,billed:0,remarks:"Surveyor visit pending.",
+      orders:[],payments:[],documents:[{id:id(),type:"Claim Intimation",link:"",date:"2026-07-11"}]},
+    {id:id(),job:"AV-2026-003",reg:"OD 14 PQ 4567",model:"Mahindra Bolero",customer:"Kishore Kumar",phone:"99001 12233",insurer:"",policy:"",claim:"",claimType:"Cash",entry:"2026-07-02",docs:"2026-07-02",permission:"2026-07-03",expDelivery:"2026-07-15",actDelivery:"2026-07-18",status:"Closed / Delivered",estimate:95000,billed:95000,remarks:"",
+      orders:[{id:id(),item:"Windshield glass",vendor:"GlassMart",amount:12000,date:"2026-07-03"}],
+      payments:[{id:id(),payer:"Customer",amount:50000,date:"2026-07-16",mode:"UPI",ref:"UTR-111"},{id:id(),payer:"Customer",amount:45000,date:"2026-07-18",mode:"Cash",ref:"-"}],
+      documents:[{id:id(),type:"Final Bill",link:"",date:"2026-07-16"}]},
+  ]};
+}
+let saveT;
+function flashSaved(silent,fail){
+  if(silent)return;const p=document.getElementById('savepill');if(!p)return;
+  p.textContent=fail?'⚠ Save failed':'✓ Saved';p.classList.add('on');
+  clearTimeout(saveT);saveT=setTimeout(()=>{p.classList.remove('on');p.textContent=''},1600);
+}
+async function load(){
+  if(SB){
+    try{
+      const {data,error}=await SB.from('app_state').select('data').eq('id','main').maybeSingle();
+      if(error) throw error;
+      if(data && data.data){ state.data=data.data; }
+      else { state.data=seed(); await save(true); }
+    }catch(e){ console.error(e); alert('Could not load your data from the cloud:\n'+(e.message||e)); state.data=seed(); }
+  } else {
+    try{ const r=await window.storage.get(KEY); state.data=JSON.parse(r.value); }
+    catch(e){ state.data=seed(); await save(true); }
+  }
+  render();
+}
+async function save(silent){
+  if(SB){
+    try{
+      const {error}=await SB.from('app_state').upsert({id:'main',data:state.data,updated_at:new Date().toISOString()});
+      if(error) throw error;
+      flashSaved(silent);
+    }catch(e){ console.error('save failed',e); flashSaved(silent,true); }
+  } else {
+    try{ await window.storage.set(KEY,JSON.stringify(state.data)); flashSaved(silent); }
+    catch(e){ console.error(e); }
+  }
+}
+async function init(){
+  if(SB){
+    try{ const {data:{session}}=await SB.auth.getSession(); if(session) afterAuth(); else showLogin(); }
+    catch(e){ showLogin(); }
+  } else { load(); }
+}
+function afterAuth(){ const b=document.getElementById('signout'); if(b)b.style.display='block'; load(); }
+function doSignOut(){ if(SB) SB.auth.signOut().then(()=>location.reload()); }
+function showLogin(){
+  document.getElementById('modal-root').innerHTML=`
+    <div class="scrim"><div class="modal" style="max-width:380px">
+      <div class="mh"><h3>Sign in</h3></div>
+      <div class="mbody">
+        <div class="field full" style="margin-bottom:14px"><label>Email</label><input id="li_email" type="email" autocomplete="username"></div>
+        <div class="field full"><label>Password</label><input id="li_pass" type="password" autocomplete="current-password"></div>
+        <div id="li_err" style="color:var(--red);font-size:12.5px;margin-top:12px;display:none"></div>
+      </div>
+      <div class="mfoot"><button class="btn amber" id="li_btn" style="width:100%;justify-content:center">Sign in</button></div>
+    </div></div>`;
+  const btn=document.getElementById('li_btn');
+  const doLogin=async()=>{
+    btn.textContent='Signing in…';
+    const {error}=await SB.auth.signInWithPassword({email:val('li_email'),password:document.getElementById('li_pass').value});
+    if(error){ const el=document.getElementById('li_err'); el.style.display='block'; el.textContent=error.message; btn.textContent='Sign in'; }
+    else{ closeModal(); afterAuth(); }
+  };
+  btn.addEventListener('click',doLogin);
+  document.getElementById('li_pass').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+}
+
+/* ============ helpers ============ */
+function id(){return 'x'+Math.random().toString(36).slice(2,9)}
+const inr=n=>'₹'+Number(n||0).toLocaleString('en-IN',{maximumFractionDigits:0});
+function fdate(iso){if(!iso)return '—';const[y,m,d]=iso.split('-');return `${d}-${m}-${y}`}
+function daysSince(iso){if(!iso)return 0;const t=new Date(iso);const now=new Date();return Math.floor((now-t)/86400000)}
+function veh(vid){return state.data.vehicles.find(v=>v.id===vid)}
+function totals(v){
+  const ordered=(v.orders||[]).reduce((s,o)=>s+Number(o.amount||0),0);
+  const received=(v.payments||[]).reduce((s,p)=>s+Number(p.amount||0),0);
+  const billed=Number(v.billed||0);
+  return {ordered,received,billed,due:billed-received,margin:billed-ordered};
+}
+const isActive=v=>v.status!=='Closed / Delivered';
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+
+/* ============ router ============ */
+function go(view,vid){state.view=view;state.vid=vid||null;if(view==='detail')state.tab='orders';document.getElementById('side').classList.remove('open');render()}
+document.getElementById('nav').addEventListener('click',e=>{const b=e.target.closest('button');if(b)go(b.dataset.view)});
+
+function render(){
+  document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===state.view));
+  const el=document.getElementById('view');
+  if(state.view==='dashboard')el.innerHTML=viewDashboard();
+  else if(state.view==='vehicles')el.innerHTML=viewVehicles();
+  else if(state.view==='detail')el.innerHTML=viewDetail();
+}
+
+/* ============ dashboard ============ */
+function viewDashboard(){
+  const vs=state.data.vehicles;
+  const active=vs.filter(isActive);
+  const valueInShop=active.reduce((s,v)=>s+Number(v.estimate||0),0);
+  const totalDue=vs.reduce((s,v)=>s+totals(v).due,0);
+  const totalRecv=vs.reduce((s,v)=>s+totals(v).received,0);
+
+  // attention items
+  const att=[];
+  active.forEach(v=>{
+    if(!v.permission){const d=daysSince(v.entry);att.push({type:'amber',icon:clock,b:`${v.model} awaiting insurer approval`,s:`${daysLabel(d)} since intake · ${v.customer}`,vid:v.id})}
+    const t=totals(v);
+    if(t.due>0 && v.status!=='Awaiting Approval'){att.push({type:'red',icon:rupee,b:`${inr(t.due)} outstanding — ${v.model}`,s:`Billed ${inr(t.billed)}, received ${inr(t.received)} · ${v.customer}`,vid:v.id})}
+    if(v.expDelivery && !v.actDelivery && new Date(v.expDelivery)<new Date()){att.push({type:'amber',icon:flag,b:`${v.model} past expected delivery`,s:`Due out ${fdate(v.expDelivery)} · ${v.customer}`,vid:v.id})}
+  });
+
+  return `
+  <div class="topbar">
+    <div><div class="h">Dashboard</div><div class="sub">${active.length} vehicle${active.length!==1?'s':''} in the shop · updated live as you work</div></div>
+    <button class="btn amber" onclick="openVehicle()">${plus} Add vehicle</button>
+  </div>
+  <div class="kpis">
+    <div class="kpi b"><div class="lab">In the shop</div><div class="val">${active.length}</div><div class="meta">${vs.length} total on record</div></div>
+    <div class="kpi"><div class="lab">Value in shop</div><div class="val money num">${inr(valueInShop)}</div><div class="meta">estimated, active jobs</div></div>
+    <div class="kpi r"><div class="lab">Outstanding due</div><div class="val money num">${inr(totalDue)}</div><div class="meta">across all vehicles</div></div>
+    <div class="kpi g"><div class="lab">Received</div><div class="val money num">${inr(totalRecv)}</div><div class="meta">customer + insurer</div></div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="ch"><h3>Vehicles</h3><span class="cnt">${vs.length}</span></div>
+      <div class="vtable">
+        ${vs.length?vs.map(vehRow).join(''):'<div class="lempty">No vehicles yet. Add your first one to get started.</div>'}
+      </div>
+    </div>
+    <div class="card">
+      <div class="ch"><h3>Needs attention</h3><span class="cnt">${att.length}</span></div>
+      <div class="att">
+        ${att.length?att.map(a=>`
+          <div class="row" style="cursor:pointer" onclick="go('detail','${a.vid}')">
+            <div class="ic ${a.type}">${a.icon}</div>
+            <div class="tx"><b>${esc(a.b)}</b><span>${esc(a.s)}</span></div>
+          </div>`).join(''):'<div class="empty">All clear. Nothing needs chasing right now.</div>'}
+      </div>
+    </div>
+  </div>`;
+}
+function vehRow(v){
+  const t=totals(v),cls=STATUS_CLASS[v.status]||'slate';
+  return `<div class="vr" onclick="go('detail','${v.id}')">
+    <span class="plate">${esc(v.reg)}</span>
+    <div class="vmid"><b>${esc(v.model)}</b><span>${esc(v.customer)} · ${esc(v.job)}</span></div>
+    <div class="vright">
+      <span class="chip ${cls}">${esc(v.status)}</span>
+      <div class="due ${t.due>0?'owed':'zero'} num" style="margin-top:6px">${t.due>0?inr(t.due)+' due':'settled'}</div>
+    </div>
+  </div>`;
+}
+
+/* ============ vehicles list ============ */
+function viewVehicles(){
+  const vs=state.data.vehicles;
+  return `
+  <div class="topbar">
+    <div><div class="h">Vehicles</div><div class="sub">Every accident job, from intake to delivery</div></div>
+    <button class="btn amber" onclick="openVehicle()">${plus} Add vehicle</button>
+  </div>
+  <div class="card"><div class="vtable">
+    ${vs.length?vs.map(vehRow).join(''):'<div class="lempty">No vehicles yet. Add your first one to get started.</div>'}
+  </div></div>`;
+}
+
+/* ============ detail ============ */
+function viewDetail(){
+  const v=veh(state.vid); if(!v)return '';
+  const t=totals(v),cls=STATUS_CLASS[v.status]||'slate';
+  const pct=v.estimate?Math.min(100,Math.round(t.ordered/v.estimate*100)):0;
+  const steps=[["Intake",v.entry],["Documents",v.docs],["Approval",v.permission],["Delivered",v.actDelivery]];
+  return `
+  <button class="back" onclick="go('${state.from||'dashboard'}')">${chev} Back</button>
+  <div class="dhead">
+    <span class="plate big">${esc(v.reg)}</span>
+    <div class="model">${esc(v.model)}</div>
+    <span class="chip ${cls}">${esc(v.status)}</span>
+    <div style="flex:1"></div>
+    <button class="btn ghost sm" onclick="openVehicle('${v.id}')">${edit} Edit</button>
+  </div>
+  <div class="dcust"><b>${esc(v.customer)}</b> · ${esc(v.phone)||'no phone'} · ${v.claimType==='Cash'?'Cash job':esc(v.insurer)+' · Claim '+esc(v.claim)} · ${esc(v.job)}</div>
+
+  <div class="timeline">
+    ${steps.map(([lab,date],i)=>{
+      const done=!!date;const pend=!done&&(i===0||steps[i-1][1]);
+      return `<div class="tstep ${done?'done':pend?'pending':''}">
+        <div class="tdot">${done?tick:''}</div>
+        <div class="tlab">${lab}</div>
+        <div class="tdate">${done?fdate(date):(pend?'pending':'—')}</div>
+      </div>`}).join('')}
+  </div>
+
+  <div class="fin">
+    <div class="fcard"><div class="lab">Estimate</div><div class="v num">${inr(v.estimate)}</div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="sub">${inr(t.ordered)} ordered · ${pct}% of estimate</div></div>
+    <div class="fcard"><div class="lab">Billed</div><div class="v num">${inr(t.billed)}</div>
+      <div class="sub">${inr(t.received)} received</div></div>
+    <div class="fcard"><div class="lab">Balance due</div><div class="v num ${t.due>0?'red':'green'}">${inr(t.due)}</div>
+      <div class="sub">Margin ${inr(t.margin)} (billed − ordered)</div></div>
+  </div>
+
+  <div class="tabs" id="tabs">
+    <button data-tab="orders" class="${state.tab==='orders'?'active':''}">Orders <span class="num">(${(v.orders||[]).length})</span></button>
+    <button data-tab="payments" class="${state.tab==='payments'?'active':''}">Payments <span class="num">(${(v.payments||[]).length})</span></button>
+    <button data-tab="documents" class="${state.tab==='documents'?'active':''}">Documents <span class="num">(${(v.documents||[]).length})</span></button>
+  </div>
+  <div class="tabwrap">${renderTab(v)}</div>`;
+}
+document.getElementById('view').addEventListener('click',e=>{
+  const tb=e.target.closest('#tabs button'); if(tb){state.tab=tb.dataset.tab;render()}
+});
+function renderTab(v){
+  if(state.tab==='orders'){
+    const rows=(v.orders||[]).map(o=>`
+      <div class="lrow" style="grid-template-columns:1fr 130px 110px 34px">
+        <div><b>${esc(o.item)}</b><div class="muted">${esc(o.vendor)||'—'}</div></div>
+        <div class="muted num" style="text-align:right">${fdate(o.date)}</div>
+        <div class="mono">${inr(o.amount)}</div>
+        <button class="del" onclick="delChild('${v.id}','orders','${o.id}')">${trash}</button>
+      </div>`).join('');
+    return `<div class="tabhead"><button class="btn amber sm" onclick="openOrder('${v.id}')">${plus} Add order</button></div>
+      ${rows||'<div class="lempty">No parts ordered yet.</div>'}`;
+  }
+  if(state.tab==='payments'){
+    const rows=(v.payments||[]).map(p=>`
+      <div class="lrow" style="grid-template-columns:auto 1fr 130px 110px 34px">
+        <span class="paytag ${p.payer==='Insurance'?'ins':'cust'}">${esc(p.payer)}</span>
+        <div class="muted">${esc(p.mode)} · ${esc(p.ref)||'—'}</div>
+        <div class="muted num" style="text-align:right">${fdate(p.date)}</div>
+        <div class="mono" style="color:var(--green)">${inr(p.amount)}</div>
+        <button class="del" onclick="delChild('${v.id}','payments','${p.id}')">${trash}</button>
+      </div>`).join('');
+    return `<div class="tabhead"><button class="btn amber sm" onclick="openPayment('${v.id}')">${plus} Record payment</button></div>
+      ${rows||'<div class="lempty">No payments received yet.</div>'}`;
+  }
+  const rows=(v.documents||[]).map(d=>`
+    <div class="lrow" style="grid-template-columns:150px 1fr 110px 34px">
+      <b>${esc(d.type)}</b>
+      <div>${d.link?`<a class="doclink" href="${esc(d.link)}" target="_blank" rel="noopener">Open file ↗</a>`:'<span class="muted">no link — paste Drive URL</span>'}</div>
+      <div class="muted num" style="text-align:right">${fdate(d.date)}</div>
+      <button class="del" onclick="delChild('${v.id}','documents','${d.id}')">${trash}</button>
+    </div>`).join('');
+  return `<div class="tabhead"><button class="btn amber sm" onclick="openDoc('${v.id}')">${plus} Add document</button></div>
+    ${rows||'<div class="lempty">No documents linked yet.</div>'}`;
+}
+function delChild(vid,kind,cid){const v=veh(vid);v[kind]=v[kind].filter(x=>x.id!==cid);save();render()}
+
+/* ============ modals ============ */
+function modal(title,body,onSave,saveLabel){
+  const root=document.getElementById('modal-root');
+  root.innerHTML=`<div class="scrim" id="scrim">
+    <div class="modal" role="dialog" aria-modal="true">
+      <div class="mh"><h3>${esc(title)}</h3><button class="x" onclick="closeModal()">${x}</button></div>
+      <div class="mbody">${body}</div>
+      <div class="mfoot"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn amber" id="msave">${saveLabel||'Save'}</button></div>
+    </div></div>`;
+  document.getElementById('scrim').addEventListener('mousedown',e=>{if(e.target.id==='scrim')closeModal()});
+  document.getElementById('msave').addEventListener('click',onSave);
+}
+function closeModal(){document.getElementById('modal-root').innerHTML=''}
+function val(id){const e=document.getElementById(id);return e?e.value.trim():''}
+function numval(id){return Number(val(id).replace(/[₹,\s]/g,''))||0}
+
+function openVehicle(vid){
+  const v=vid?veh(vid):{};
+  const opt=STATUSES.map(s=>`<option ${v.status===s?'selected':''}>${s}</option>`).join('');
+  const ct=['Own Damage','Third Party','Cash'].map(c=>`<option ${v.claimType===c?'selected':''}>${c}</option>`).join('');
+  modal(vid?'Edit vehicle':'Add vehicle',`
+    <div class="fgrid">
+      <div class="field"><label>Job ID</label><input id="f_job" value="${esc(v.job)}" placeholder="AV-2026-004"></div>
+      <div class="field"><label>Registration no.</label><input id="f_reg" value="${esc(v.reg)}" placeholder="OD 02 AB 1234"></div>
+      <div class="field"><label>Make / Model</label><input id="f_model" value="${esc(v.model)}" placeholder="Tata 407"></div>
+      <div class="field"><label>Status</label><select id="f_status">${opt}</select></div>
+      <div class="field"><label>Customer / Owner</label><input id="f_customer" value="${esc(v.customer)}"></div>
+      <div class="field"><label>Phone</label><input id="f_phone" value="${esc(v.phone)}"></div>
+      <div class="field"><label>Claim type</label><select id="f_claimType">${ct}</select></div>
+      <div class="field"><label>Insurance company</label><input id="f_insurer" value="${esc(v.insurer)}"></div>
+      <div class="field"><label>Policy no.</label><input id="f_policy" value="${esc(v.policy)}"></div>
+      <div class="field"><label>Claim no.</label><input id="f_claim" value="${esc(v.claim)}"></div>
+      <div class="field"><label>Date of entry</label><input id="f_entry" type="date" value="${v.entry||''}"></div>
+      <div class="field"><label>Documents received</label><input id="f_docs" type="date" value="${v.docs||''}"></div>
+      <div class="field"><label>Permission to repair</label><input id="f_permission" type="date" value="${v.permission||''}"></div>
+      <div class="field"><label>Expected delivery</label><input id="f_expDelivery" type="date" value="${v.expDelivery||''}"></div>
+      <div class="field"><label>Actual delivery</label><input id="f_actDelivery" type="date" value="${v.actDelivery||''}"></div>
+      <div class="field"><label>Estimated value (₹)</label><input id="f_estimate" inputmode="numeric" value="${v.estimate||''}"></div>
+      <div class="field"><label>Billed amount (₹)</label><input id="f_billed" inputmode="numeric" value="${v.billed||''}"></div>
+      <div class="field full"><label>Remarks</label><input id="f_remarks" value="${esc(v.remarks)}"></div>
+    </div>`,()=>{
+      const rec={
+        job:val('f_job'),reg:val('f_reg'),model:val('f_model'),status:val('f_status'),
+        customer:val('f_customer'),phone:val('f_phone'),claimType:val('f_claimType'),
+        insurer:val('f_insurer'),policy:val('f_policy'),claim:val('f_claim'),
+        entry:val('f_entry'),docs:val('f_docs'),permission:val('f_permission'),
+        expDelivery:val('f_expDelivery'),actDelivery:val('f_actDelivery'),
+        estimate:numval('f_estimate'),billed:numval('f_billed'),remarks:val('f_remarks')
+      };
+      if(!rec.reg&&!rec.model){alert('Add at least a registration number or model.');return}
+      if(vid){Object.assign(v,rec)}
+      else{state.data.vehicles.unshift({id:id(),orders:[],payments:[],documents:[],...rec});}
+      save();closeModal();
+      if(!vid){state.view='detail';state.vid=state.data.vehicles[0].id;state.tab='orders'}
+      render();
+    },vid?'Save changes':'Add vehicle');
+}
+function openOrder(vid){
+  modal('Add order',`<div class="fgrid">
+    <div class="field full"><label>Item / part</label><input id="o_item" placeholder="Front bumper assembly"></div>
+    <div class="field"><label>Vendor</label><input id="o_vendor"></div>
+    <div class="field"><label>Amount (₹)</label><input id="o_amount" inputmode="numeric"></div>
+    <div class="field"><label>Order date</label><input id="o_date" type="date" value="${today()}"></div>
+  </div>`,()=>{
+    const v=veh(vid);v.orders=v.orders||[];v.orders.push({id:id(),item:val('o_item'),vendor:val('o_vendor'),amount:numval('o_amount'),date:val('o_date')});
+    save();closeModal();render();
+  },'Add order');
+}
+function openPayment(vid){
+  modal('Record payment',`<div class="fgrid">
+    <div class="field"><label>Payer</label><select id="p_payer"><option>Customer</option><option>Insurance</option></select></div>
+    <div class="field"><label>Amount (₹)</label><input id="p_amount" inputmode="numeric"></div>
+    <div class="field"><label>Mode</label><select id="p_mode"><option>Cash</option><option>Cheque</option><option>NEFT</option><option>UPI</option></select></div>
+    <div class="field"><label>Date</label><input id="p_date" type="date" value="${today()}"></div>
+    <div class="field full"><label>Reference</label><input id="p_ref" placeholder="UTR / cheque no."></div>
+  </div>`,()=>{
+    const v=veh(vid);v.payments=v.payments||[];v.payments.push({id:id(),payer:val('p_payer'),amount:numval('p_amount'),mode:val('p_mode'),date:val('p_date'),ref:val('p_ref')});
+    save();closeModal();render();
+  },'Record payment');
+}
+function openDoc(vid){
+  const types=["RC","Insurance Policy","Driving Licence","Claim Intimation","Survey Report","Estimate","FIR / Police Report","Before Photos","After Photos","Final Bill","Payment Proof","Other"];
+  modal('Add document',`<div class="fgrid">
+    <div class="field"><label>Document type</label><select id="d_type">${types.map(t=>`<option>${t}</option>`).join('')}</select></div>
+    <div class="field"><label>Date</label><input id="d_date" type="date" value="${today()}"></div>
+    <div class="field full"><label>Google Drive link</label><input id="d_link" placeholder="https://drive.google.com/..."></div>
+  </div>`,()=>{
+    const v=veh(vid);v.documents=v.documents||[];v.documents.push({id:id(),type:val('d_type'),link:val('d_link'),date:val('d_date')});
+    save();closeModal();render();
+  },'Add document');
+}
+function today(){return new Date().toISOString().slice(0,10)}
+function daysLabel(d){return d<=0?'today':d+' day'+(d>1?'s':'')}
+
+/* ============ import / export ============ */
+function exportData(){
+  const blob=new Blob([JSON.stringify(state.data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='fleet-recovery-backup-'+today()+'.json';a.click();
+}
+function importData(){document.getElementById('importfile').click()}
+document.getElementById('importfile').addEventListener('change',e=>{
+  const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(d&&Array.isArray(d.vehicles)){state.data=d;save();render();alert('Data imported.')}else alert('That file does not look like a Fleet Recovery backup.')}catch{alert('Could not read that file.')}};
+  r.readAsText(f);e.target.value='';
+});
+
+/* keep track of where detail was opened from */
+const _go=go; go=function(view,vid){if(view==='detail')state.from=state.view;_go(view,vid)};
+
+/* ============ icons ============ */
+const plus='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+const chev='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><path d="M15 18l-6-6 6-6"/></svg>';
+const edit='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>';
+const trash='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
+const x='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" width="18" height="18"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+const tick='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+const clock='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+const rupee='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12M6 8h12M9 13c5 0 6-5 1-9M6 13h5l5 7"/></svg>';
+const flag='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22V4s2-2 5-2 4 2 7 2 4-1 4-1v11s-1 1-4 1-4-2-7-2-5 2-5 2"/></svg>';
+
+init();
+</script>
+</body>
+</html>
