@@ -436,6 +436,7 @@ function viewDetail(){
     <span class="chip ${cls}">${esc(v.status)}</span>
     <div style="flex:1"></div>
     <button class="btn ghost sm" onclick="openVehicle('${v.id}')">${edit} Edit</button>
+    <button class="btn ghost sm" onclick="if(confirm('Delete this vehicle and all its orders, payments and documents? This cannot be undone.')){state.data.vehicles=state.data.vehicles.filter(x=>x.id!=='${v.id}');save();go('vehicles');}" style="color:var(--red)">${trash} Delete</button>
   </div>
   <div class="dcust"><b>${esc(v.customer)}</b> · ${esc(v.phone)||'no phone'} · ${v.claimType==='Cash'?'Cash job':esc(v.insurer)+' · Claim '+esc(v.claim)} · ${esc(v.job)}</div>
 
