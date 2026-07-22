@@ -497,7 +497,7 @@ function renderTab(v){
   const rows=(v.documents||[]).map(d=>`
     <div class="lrow" style="grid-template-columns:150px 1fr 110px 34px">
       <b>${esc(d.type)}</b>
-      <div>${d.link?`<a class="doclink" href="${esc(d.link)}" target="_blank" rel="noopener">Open file ↗</a>`:'<span class="muted">no link — paste Drive URL</span>'}</div>
+      <div>${d.link?`<a class="doclink" href="${/^https?:\/\//i.test(d.link)?esc(d.link):'#'}" target="_blank" rel="noopener noreferrer">Open file ↗</a>`:'<span class="muted">no link — paste Drive URL</span>'}</div>
       <div class="muted num" style="text-align:right">${fdate(d.date)}</div>
       <button class="del" onclick="delChild('${v.id}','documents','${d.id}')">${trash}</button>
     </div>`).join('');
@@ -609,7 +609,7 @@ function exportData(){
 function importData(){document.getElementById('importfile').click()}
 document.getElementById('importfile').addEventListener('change',e=>{
   const f=e.target.files[0];if(!f)return;const r=new FileReader();
-  r.onload=()=>{try{const d=JSON.parse(r.result);if(d&&Array.isArray(d.vehicles)){state.data=d;save();render();alert('Data imported.')}else alert('That file does not look like a Fleet Recovery backup.')}catch{alert('Could not read that file.')}};
+  r.onload=()=>{try{const d=JSON.parse(r.result);if(d&&Array.isArray(d.vehicles)){if(!confirm('This will REPLACE all '+state.data.vehicles.length+' vehicles currently in the app with '+d.vehicles.length+' from this backup file. This cannot be undone. Continue?'))return;state.data=d;save();render();alert('Data imported.')}else alert('That file does not look like a Fleet Recovery backup.')}catch{alert('Could not read that file.')}};
   r.readAsText(f);e.target.value='';
 });
 
