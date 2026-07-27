@@ -224,6 +224,42 @@
   .fcard .bar i{display:block;height:100%;border-radius:6px;background:linear-gradient(90deg,var(--amber),var(--amber2));transition:width 1s cubic-bezier(.2,.8,.2,1)}
   .fcard .sub{font-size:11.5px;color:var(--muted);margin-top:8px}
 
+  /* reconciliation */
+  .recon{margin-bottom:6px}
+  .reconhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+  .reconhead h3{font-family:'Space Grotesk';font-size:15px;font-weight:600;display:flex;align-items:center;gap:9px}
+  .reconhead h3 svg{width:17px;height:17px;color:var(--amber)}
+  .rboxes{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+  .rbox{background:linear-gradient(160deg,var(--panel2),var(--panel));border:1px solid var(--line);border-radius:var(--r);padding:17px;position:relative}
+  .rbox .rtop{display:flex;align-items:center;gap:11px;margin-bottom:13px}
+  .rbox .ri{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;flex:none;background:rgba(255,176,32,.14);color:var(--amber)}
+  .rbox .ri svg{width:17px;height:17px}
+  .rbox .rlab{font-size:13px;font-weight:600;color:var(--text)}
+  .rbox .rsub{font-size:11px;color:var(--muted);margin-top:1px}
+  .rbox .rval{font-family:'JetBrains Mono';font-weight:700;font-size:23px;letter-spacing:-.5px}
+  .rbox .rvar{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;padding:4px 10px;border-radius:20px;margin-top:11px}
+  .rbox .rvar svg{width:12px;height:12px}
+  .rbox .rvar.ok{background:rgba(52,211,153,.14);color:var(--green)}
+  .rbox .rvar.diff{background:rgba(251,113,133,.14);color:var(--red)}
+  .rbox .rvar.none{background:rgba(255,255,255,.05);color:var(--muted)}
+  .rbox .rlink{position:absolute;top:16px;right:16px;font-size:11.5px;font-weight:600;color:var(--blue);text-decoration:none;display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+  .rbox .rlink svg{width:14px;height:14px} .rbox .rlink.add{color:var(--muted)} .rbox .rlink:hover{text-decoration:underline}
+  .verdict{display:flex;align-items:flex-start;gap:13px;padding:16px 18px;border-radius:var(--r);border:1px solid var(--line)}
+  .verdict.good{background:rgba(52,211,153,.09);border-color:rgba(52,211,153,.3)}
+  .verdict.bad{background:rgba(251,113,133,.09);border-color:rgba(251,113,133,.3)}
+  .verdict.info{background:rgba(255,255,255,.03)}
+  .verdict .vi{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;flex:none}
+  .verdict .vi svg{width:17px;height:17px}
+  .verdict.good .vi{background:rgba(52,211,153,.16);color:var(--green)} .verdict.bad .vi{background:rgba(251,113,133,.16);color:var(--red)} .verdict.info .vi{background:rgba(255,255,255,.06);color:var(--muted)}
+  .verdict .vt b{font-weight:600;font-size:13.5px} .verdict .vt ul{margin:7px 0 0;padding-left:18px} .verdict .vt li{font-size:12.5px;color:var(--text2);margin-top:4px}
+  .sectlabel{font-family:'Space Grotesk';font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:26px 0 12px}
+  /* photos */
+  .pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:16px}
+  .pcell{position:relative;aspect-ratio:4/3;border-radius:12px;overflow:hidden;border:1px solid var(--line);background:var(--bg1)}
+  .pcell img{width:100%;height:100%;object-fit:cover;display:block;transition:.25s}
+  .pcell:hover img{transform:scale(1.06)}
+  .pdel{position:absolute;top:8px;right:8px;width:28px;height:28px;border-radius:8px;background:rgba(10,14,26,.72);color:#fff;display:grid;place-items:center;opacity:0;transition:.15s;backdrop-filter:blur(4px)}
+  .pcell:hover .pdel{opacity:1} .pdel:hover{background:var(--red)} .pdel svg{width:15px;height:15px}
   .tabs{display:flex;gap:5px;margin:24px 0 0}
   .tabs button{padding:10px 16px;font-weight:600;font-size:13.5px;color:var(--muted);border-radius:11px 11px 0 0;transition:.14s}
   .tabs button.active{color:var(--text);background:var(--panel);border:1px solid var(--line);border-bottom:none}
@@ -293,6 +329,7 @@
 </div>
 <div id="modal-root"></div>
 <input type="file" id="importfile" accept="application/json" style="display:none">
+<input type="file" id="photoInput" accept="image/*" multiple style="display:none">
 
 <script>
 /* ============ CONFIG — paste your two Supabase values here ============ */
@@ -311,7 +348,7 @@ let state={view:'dashboard',vid:null,tab:'orders',from:'dashboard',data:{vehicle
 
 function seed(){
   return {vehicles:[
-    {id:id(),job:"AV-2026-001",reg:"OD 02 AB 1234",model:"Tata 407",customer:"Ramesh Transport",phone:"98765 43210",insurer:"ICICI Lombard",policy:"POL-123",claim:"CLM-456",claimType:"Own Damage",entry:"2026-07-05",docs:"2026-07-07",permission:"2026-07-12",expDelivery:"2026-07-25",actDelivery:"",billDate:"2026-07-14",status:"Under Repair",estimate:185000,billed:50000,remarks:"",
+    {id:id(),job:"AV-2026-001",reg:"OD 02 AB 1234",model:"Tata 407",customer:"Ramesh Transport",phone:"98765 43210",insurer:"ICICI Lombard",policy:"POL-123",claim:"CLM-456",claimType:"Own Damage",entry:"2026-07-05",docs:"2026-07-07",permission:"2026-07-12",expDelivery:"2026-07-25",actDelivery:"",billDate:"2026-07-14",status:"Under Repair",estimate:185000,billed:50000,remarks:"",piAmount:45000,reqAmount:43000,linkOrder:"",linkPI:"",linkReq:"",
       orders:[{id:id(),item:"Front bumper assembly",vendor:"AutoParts Co",amount:25000,date:"2026-07-08"},{id:id(),item:"Headlight (LH+RH)",vendor:"AutoParts Co",amount:18000,date:"2026-07-09"}],
       payments:[{id:id(),payer:"Insurance",amount:30000,date:"2026-07-15",mode:"NEFT",ref:"NEFT-222"}],
       documents:[{id:id(),type:"RC",link:"",date:"2026-07-07"},{id:id(),type:"Before Photos",link:"",date:"2026-07-07"}]},
@@ -384,16 +421,16 @@ function moneyBadge(v){const t=totals(v);
 }
 
 /* ============ router / nav ============ */
-const NAV=[
+function navItems(){return [
   ['dashboard','Dashboard',ic_grid],
   ['vehicles','Vehicles',ic_truck],
   ['receivables','Receivables',ic_wallet],
   ['insurer','By Insurer',ic_shield],
   ['aging','Aging',ic_hour],
-];
+];}
 function renderNav(){
   const due=state.data.vehicles.reduce((s,v)=>s+(totals(v).due>0?1:0),0);
-  document.getElementById('nav').innerHTML=NAV.map(([v,label,icon])=>{
+  document.getElementById('nav').innerHTML=navItems().map(([v,label,icon])=>{
     const badge=(v==='receivables'&&due>0)?`<span class="badge">${due}</span>`:'';
     return `<button data-view="${v}" class="${state.view===v?'active':''}">${icon} ${label} ${badge}</button>`;
   }).join('');
@@ -576,10 +613,13 @@ function viewDetail(){
     <div class="fcard"><div class="lab">Billed</div><div class="v num">${inr(t.billed)}</div><div class="bar"><i style="width:0" data-w="${colPct}"></i></div><div class="sub">${inr(t.received)} received · ${colPct}% collected</div></div>
     <div class="fcard"><div class="lab">Balance due</div><div class="v num ${t.due>0?'red':'green'}">${inr(t.due)}</div><div class="sub">${t.due>0?recvDays(v)+' days outstanding':'nothing pending'} · margin ${inr(t.margin)}</div></div>
   </div>
+  ${reconCard(v)}
+  <div class="sectlabel">Records</div>
   <div class="tabs" id="tabs">
     <button data-tab="orders" class="${state.tab==='orders'?'active':''}">Orders <span class="num">(${(v.orders||[]).length})</span></button>
     <button data-tab="payments" class="${state.tab==='payments'?'active':''}">Payments <span class="num">(${(v.payments||[]).length})</span></button>
     <button data-tab="documents" class="${state.tab==='documents'?'active':''}">Documents <span class="num">(${(v.documents||[]).length})</span></button>
+    <button data-tab="photos" class="${state.tab==='photos'?'active':''}">Photos <span class="num">(${(v.photos||[]).length})</span></button>
   </div>
   <div class="tabwrap">${renderTab(v)}</div>`;
 }
@@ -591,7 +631,8 @@ function renderTab(v){
       <div style="text-align:right"><span class="agepill ${ageCls(daysSince(o.date))}">${daysSince(o.date)}d</span></div>
       <div class="mono">${inr(o.amount)}</div>
       <button class="del" onclick="delChild('${v.id}','orders','${o.id}')">${ic_trash}</button></div>`).join('');
-    return `<div class="tabhead"><button class="btn sm" onclick="openOrder('${v.id}')">${ic_plus} Add order</button></div>${rows||'<div class="lempty">No parts ordered yet.</div>'}`;
+    const oc=(v.orders||[]).length, ot=totals(v).ordered;
+    return `<div class="tabhead" style="justify-content:space-between"><div style="display:flex;align-items:center;gap:6px;color:var(--text2);font-size:13px;font-weight:600">${oc} item${oc!==1?'s':''} · <span class="num" style="color:var(--text)">${inr(ot)}</span> total ordered</div><button class="btn sm" onclick="openOrder('${v.id}')">${ic_plus} Add order</button></div>${rows||'<div class="lempty">No parts ordered yet.</div>'}`;
   }
   if(state.tab==='payments'){
     const rows=(v.payments||[]).map(p=>`<div class="lrow" style="grid-template-columns:auto 1fr 130px 110px 34px">
@@ -601,6 +642,12 @@ function renderTab(v){
       <div class="mono" style="color:var(--green)">${inr(p.amount)}</div>
       <button class="del" onclick="delChild('${v.id}','payments','${p.id}')">${ic_trash}</button></div>`).join('');
     return `<div class="tabhead"><button class="btn sm" onclick="openPayment('${v.id}')">${ic_plus} Record payment</button></div>${rows||'<div class="lempty">No payments received yet.</div>'}`;
+  }
+  if(state.tab==='photos'){
+    const ph=v.photos||[];
+    const grid=ph.length?`<div class="pgrid">${ph.map(p=>`<div class="pcell"><a href="${esc(p.url)}" target="_blank" rel="noopener noreferrer"><img src="${esc(p.url)}" loading="lazy" alt="vehicle photo"></a><button class="pdel" onclick="delPhoto('${v.id}','${p.id}')">${ic_trash}</button></div>`).join('')}</div>`:'<div class="lempty">No photos yet. Add before &amp; after shots of the vehicle.</div>';
+    const head=state.uploading?`<span style="color:var(--amber);font-size:13px;font-weight:600;display:inline-flex;align-items:center;gap:7px">${ic_clock} Uploading…</span>`:(SB?`<button class="btn sm" onclick="pickPhotos('${v.id}')">${ic_camera} Add photos</button>`:`<span style="color:var(--muted);font-size:12.5px">Photo upload works on your published cloud app</span>`);
+    return `<div class="tabhead">${head}</div>${grid}`;
   }
   const rows=(v.documents||[]).map(d=>`<div class="lrow" style="grid-template-columns:150px 1fr 110px 34px">
     <b>${esc(d.type)}</b>
@@ -675,12 +722,90 @@ function openDoc(vid){const types=["RC","Insurance Policy","Driving Licence","Cl
   <div class="field full"><label>Google Drive link</label><input id="d_link" placeholder="https://drive.google.com/..."></div></div>`,()=>{
   const v=veh(vid);v.documents=v.documents||[];v.documents.push({id:id(),type:val('d_type'),link:val('d_link'),date:val('d_date')});save();closeModal();render();},'Add document');}
 
+/* ============ reconciliation ============ */
+function reconCard(v){
+  const ordered=totals(v).ordered, items=(v.orders||[]).length;
+  const pi=Number(v.piAmount||0), req=Number(v.reqAmount||0);
+  const varPill=(val)=>{
+    if(!val)return `<span class="rvar none">not entered</span>`;
+    if(!ordered)return `<span class="rvar none">no items yet</span>`;
+    const d=val-ordered;
+    if(d===0)return `<span class="rvar ok">${ic_tick} matches ordered</span>`;
+    return `<span class="rvar diff">${ic_alert} ${d>0?'+':'−'}${inr(Math.abs(d))} vs ordered</span>`;
+  };
+  const linkBtn=(url)=> url&&/^https?:\/\//i.test(url)
+    ? `<a class="rlink" href="${esc(url)}" target="_blank" rel="noopener noreferrer">${ic_view} View</a>`
+    : `<span class="rlink add" onclick="openRecon('${v.id}')">${ic_paperclip} Attach</span>`;
+  const issues=[];
+  if(pi&&ordered&&pi!==ordered)issues.push(`Proforma invoice is ${inr(Math.abs(pi-ordered))} ${pi>ordered?'higher':'lower'} than the parts actually ordered.`);
+  if(req&&ordered&&req!==ordered)issues.push(`Requisition slip is ${inr(Math.abs(req-ordered))} ${req>ordered?'higher':'lower'} than the parts ordered.`);
+  if(pi&&req&&pi!==req)issues.push(`Proforma invoice and requisition slip differ by ${inr(Math.abs(pi-req))}.`);
+  let verdict;
+  if(!pi&&!req)verdict=`<div class="verdict info"><div class="vi">${ic_scale}</div><div class="vt"><b>Enter the PI and requisition amounts to auto-check for differences against the parts ordered.</b></div></div>`;
+  else if(issues.length)verdict=`<div class="verdict bad"><div class="vi">${ic_alert}</div><div class="vt"><b>${issues.length} discrepanc${issues.length>1?'ies':'y'} found — worth a look:</b><ul>${issues.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></div></div>`;
+  else verdict=`<div class="verdict good"><div class="vi">${ic_tick}</div><div class="vt"><b>All documents reconcile — the PI and requisition match the parts ordered.</b></div></div>`;
+  return `<div class="sectlabel">Parts reconciliation</div>
+  <div class="recon">
+    <div class="rboxes">
+      <div class="rbox"><div class="rtop"><div class="ri">${ic_doc}</div><div><div class="rlab">Parts ordered</div><div class="rsub">${items} item${items!==1?'s':''}, auto-summed</div></div></div><div class="rval num">${inr(ordered)}</div><div><span class="rvar none">baseline</span></div>${linkBtn(v.linkOrder)}</div>
+      <div class="rbox"><div class="rtop"><div class="ri">${ic_invoice}</div><div><div class="rlab">Proforma invoice</div><div class="rsub">final PI amount</div></div></div><div class="rval num">${inr(pi)}</div><div>${varPill(pi)}</div>${linkBtn(v.linkPI)}</div>
+      <div class="rbox"><div class="rtop"><div class="ri">${ic_slip}</div><div><div class="rlab">Requisition slip</div><div class="rsub">handwritten total</div></div></div><div class="rval num">${inr(req)}</div><div>${varPill(req)}</div>${linkBtn(v.linkReq)}</div>
+    </div>
+    ${verdict}
+    <div style="display:flex;justify-content:flex-end;margin-top:12px"><button class="btn ghost sm" onclick="openRecon('${v.id}')">${ic_edit} Enter amounts & attach files</button></div>
+  </div>`;
+}
+function openRecon(vid){const v=veh(vid);
+  modal('Reconciliation — amounts & documents',`<div class="fgrid">
+    <div class="field"><label>Proforma invoice (PI) amount (₹)</label><input id="r_pi" inputmode="numeric" value="${v.piAmount||''}"></div>
+    <div class="field"><label>Requisition slip amount (₹)</label><input id="r_req" inputmode="numeric" value="${v.reqAmount||''}"></div>
+    <div class="field full"><label>Order list — Google Drive link</label><input id="r_lo" value="${esc(v.linkOrder)}" placeholder="https://drive.google.com/..."></div>
+    <div class="field full"><label>Proforma invoice — Google Drive link</label><input id="r_lpi" value="${esc(v.linkPI)}" placeholder="https://drive.google.com/..."></div>
+    <div class="field full"><label>Requisition slip — Google Drive link</label><input id="r_lreq" value="${esc(v.linkReq)}" placeholder="https://drive.google.com/..."></div>
+  </div>`,()=>{v.piAmount=numval('r_pi');v.reqAmount=numval('r_req');v.linkOrder=val('r_lo');v.linkPI=val('r_lpi');v.linkReq=val('r_lreq');save();closeModal();render();},'Save');}
+
+/* ============ photos (Supabase Storage) ============ */
+const PHOTO_BUCKET='vehicle-photos';
+function pickPhotos(vid){const inp=document.getElementById('photoInput');inp.dataset.vid=vid;inp.click();}
+function resizeImage(file,max=1400,quality=0.8){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file),img=new Image();
+    img.onload=()=>{let w=img.width,h=img.height;if(w>max||h>max){if(w>=h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}
+      const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);URL.revokeObjectURL(url);
+      c.toBlob(b=>b?res(b):rej(new Error('resize failed')),'image/jpeg',quality);};
+    img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error('not a readable image'));};img.src=url;});
+}
+async function uploadPhotos(vid,files){
+  if(!SB){alert('Photo upload needs the published cloud version (Supabase).');return;}
+  const v=veh(vid);v.photos=v.photos||[];state.uploading=true;render();let failed=0;
+  for(const file of files){
+    try{
+      let blob,type='image/jpeg',ext='jpg';
+      try{blob=await resizeImage(file);}catch(_){blob=file;type=file.type||'image/jpeg';ext=(file.name.split('.').pop()||'jpg').toLowerCase();}
+      const path=vid+'/'+Date.now()+'-'+Math.random().toString(36).slice(2,7)+'.'+ext;
+      const {error}=await SB.storage.from(PHOTO_BUCKET).upload(path,blob,{contentType:type,upsert:false});
+      if(error)throw error;
+      const {data}=SB.storage.from(PHOTO_BUCKET).getPublicUrl(path);
+      v.photos.push({id:id(),url:data.publicUrl,path,date:today()});
+    }catch(e){console.error('photo upload failed',e);failed++;}
+  }
+  state.uploading=false;await save();render();
+  if(failed)alert(failed+' photo(s) failed to upload.\nUsually this means the "vehicle-photos" storage bucket or its policy isn\'t set up yet — or an iPhone HEIC photo couldn\'t be read.');
+}
+async function delPhoto(vid,pid){
+  const v=veh(vid);const ph=(v.photos||[]).find(p=>p.id===pid);if(!ph)return;
+  if(!confirm('Delete this photo? This cannot be undone.'))return;
+  if(SB&&ph.path){try{await SB.storage.from(PHOTO_BUCKET).remove([ph.path]);}catch(e){console.error(e);}}
+  v.photos=v.photos.filter(p=>p.id!==pid);await save();render();
+}
+
 /* ============ import / export ============ */
 function exportData(){const blob=new Blob([JSON.stringify(state.data,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='fleet-recovery-backup-'+today()+'.json';a.click();}
 function importData(){document.getElementById('importfile').click()}
 document.getElementById('importfile').addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
   r.onload=()=>{try{const d=JSON.parse(r.result);if(d&&Array.isArray(d.vehicles)){if(!confirm('This will REPLACE all '+state.data.vehicles.length+' vehicles currently in the app with '+d.vehicles.length+' from this backup file. This cannot be undone. Continue?'))return;state.data=d;save();render();alert('Data imported.')}else alert('That file does not look like a Fleet Recovery backup.')}catch{alert('Could not read that file.')}};
   r.readAsText(f);e.target.value='';});
+document.getElementById('photoInput').addEventListener('change',e=>{const vid=e.target.dataset.vid;const files=[...e.target.files];e.target.value='';if(files.length&&vid)uploadPhotos(vid,files);});
 
 /* ============ icons ============ */
 function ico(p,extra){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${extra||''}>${p}</svg>`}
@@ -703,6 +828,13 @@ const ic_wrench=ico('<path d="M14.7 6.3a4 4 0 00-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 
 const ic_flow=ico('<path d="M3 3v18h18"/><path d="M7 15l3-3 3 3 5-6"/>');
 const ic_alert=ico('<path d="M10.3 3.9L1.8 18a2 2 0 001.7 3h17a2 2 0 001.7-3L14.3 3.9a2 2 0 00-3.4 0z"/><path d="M12 9v4M12 17h.01"/>');
 const ic_arrow='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>';
+const ic_scale=ico('<path d="M20 12v6a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h9"/><path d="M9 11l3 3 8-8"/>');
+const ic_doc=ico('<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6M8 9h2"/>');
+const ic_invoice=ico('<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M9 12h5M9 16h5M11 12c2 0 2 3 0 3l3 3"/>');
+const ic_slip=ico('<path d="M5 4h14v16l-2.5-1.5L14 20l-2-1.5L10 20l-2.5-1.5L5 20z"/><path d="M9 9h6M9 13h4"/>');
+const ic_view=ico('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>');
+const ic_paperclip=ico('<path d="M21 8l-9.5 9.5a4 4 0 01-5.7-5.7L14 4a2.5 2.5 0 013.5 3.5L9 16"/>');
+const ic_camera=ico('<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>');
 
 init();
 </script>
