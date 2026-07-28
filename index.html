@@ -296,6 +296,25 @@
   .field select option{background:var(--panel)}
   .mfoot{display:flex;justify-content:flex-end;gap:10px;padding:16px 22px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--panel2)}
 
+  /* log timeline */
+  .loglist{padding:10px 20px 20px}
+  .logrow{display:grid;grid-template-columns:20px 1fr 28px;gap:13px;position:relative;padding:11px 0}
+  .logrow::before{content:"";position:absolute;left:9px;top:0;bottom:0;width:2px;background:var(--line)}
+  .logrow:last-child::before{top:0;height:16px}
+  .logdot{width:12px;height:12px;border-radius:50%;background:var(--amber);margin:4px auto 0;position:relative;z-index:1;box-shadow:0 0 0 3px var(--panel)}
+  .logdot.note{background:var(--blue)}
+  .logbody{min-width:0}
+  .logdate{font-size:11px;font-weight:600;color:var(--muted);font-family:'JetBrains Mono';letter-spacing:.02em}
+  .logtext{font-size:13.5px;margin-top:2px;color:var(--text)}
+  .logrow .del{opacity:0;color:var(--muted);align-self:center;transition:.12s}
+  .logrow:hover .del{opacity:1} .logrow .del:hover{color:var(--red)} .logrow .del svg{width:14px;height:14px}
+  .fab{position:fixed;bottom:26px;right:26px;width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;
+    background:linear-gradient(145deg,var(--amber2),var(--amber));color:#1a1400;display:grid;place-items:center;
+    box-shadow:0 10px 30px rgba(255,176,32,.45);z-index:40;transition:.18s}
+  .fab:hover{transform:translateY(-3px) scale(1.05);box-shadow:0 14px 36px rgba(255,176,32,.55)}
+  .fab svg{width:24px;height:24px}
+  .fab .pulse{position:absolute;inset:0;border-radius:50%;box-shadow:0 0 0 0 rgba(255,176,32,.5);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(255,176,32,.5)}70%{box-shadow:0 0 0 16px rgba(255,176,32,0)}100%{box-shadow:0 0 0 0 rgba(255,176,32,0)}}
   .mobtoggle{display:none}
   @media(max-width:980px){.kpis,.buckets{grid-template-columns:1fr 1fr}.grid2{grid-template-columns:1fr}.fin{grid-template-columns:1fr}}
   @media(max-width:720px){
@@ -328,6 +347,7 @@
   </main>
 </div>
 <div id="modal-root"></div>
+<button class="fab" onclick="openAssistant()" aria-label="Talk to add or update"><span class="pulse"></span><svg viewBox="0 0 24 24" fill="none" stroke="#1a1400" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0M12 17v4M8 21h8"/></svg></button>
 <input type="file" id="importfile" accept="application/json" style="display:none">
 <input type="file" id="photoInput" accept="image/*" multiple style="display:none">
 
@@ -412,6 +432,7 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','
 function today(){return new Date().toISOString().slice(0,10)}
 function daysInShop(v){if(v.actDelivery&&v.entry)return Math.max(0,Math.floor((new Date(v.actDelivery)-new Date(v.entry))/86400000));return daysSince(v.entry)}
 function recvDays(v){const base=v.billDate||v.actDelivery||v.expDelivery||v.entry;return daysSince(base)}
+function capitalBlocked(v){const t=totals(v);const blocked=Math.max(0,t.ordered-t.received);const dates=(v.orders||[]).map(o=>o.date).filter(Boolean).sort();const since=dates[0]||'';return {blocked,days:since?daysSince(since):0,since};}
 function ageCls(d){return d<=15?'a0':d<=30?'a1':d<=60?'a2':'a3'}
 function insurerName(v){return v.claimType==='Cash'?'Cash / Direct':(v.insurer||'Unspecified')}
 function moneyBadge(v){const t=totals(v);
@@ -613,6 +634,7 @@ function viewDetail(){
     <div class="fcard"><div class="lab">Billed</div><div class="v num">${inr(t.billed)}</div><div class="bar"><i style="width:0" data-w="${colPct}"></i></div><div class="sub">${inr(t.received)} received · ${colPct}% collected</div></div>
     <div class="fcard"><div class="lab">Balance due</div><div class="v num ${t.due>0?'red':'green'}">${inr(t.due)}</div><div class="sub">${t.due>0?recvDays(v)+' days outstanding':'nothing pending'} · margin ${inr(t.margin)}</div></div>
   </div>
+  ${(()=>{const cb=capitalBlocked(v);return cb.blocked>0?`<div style="margin-top:14px;padding:13px 16px;border-radius:14px;background:rgba(255,176,32,.08);border:1px solid rgba(255,176,32,.25);display:flex;align-items:center;gap:11px;font-size:13.5px"><span style="width:32px;height:32px;border-radius:9px;background:rgba(255,176,32,.16);color:var(--amber);display:grid;place-items:center;flex:none">${ic_clock}</span><span><b class="num">${inr(cb.blocked)}</b> of your own capital has been blocked in this vehicle for <b>${cb.days} day${cb.days!==1?'s':''}</b> — parts you've paid for that haven't been recovered yet.</span></div>`:'';})()}
   ${reconCard(v)}
   <div class="sectlabel">Records</div>
   <div class="tabs" id="tabs">
@@ -620,6 +642,7 @@ function viewDetail(){
     <button data-tab="payments" class="${state.tab==='payments'?'active':''}">Payments <span class="num">(${(v.payments||[]).length})</span></button>
     <button data-tab="documents" class="${state.tab==='documents'?'active':''}">Documents <span class="num">(${(v.documents||[]).length})</span></button>
     <button data-tab="photos" class="${state.tab==='photos'?'active':''}">Photos <span class="num">(${(v.photos||[]).length})</span></button>
+    <button data-tab="log" class="${state.tab==='log'?'active':''}">Log <span class="num">(${(v.log||[]).length})</span></button>
   </div>
   <div class="tabwrap">${renderTab(v)}</div>`;
 }
@@ -643,6 +666,11 @@ function renderTab(v){
       <button class="del" onclick="delChild('${v.id}','payments','${p.id}')">${ic_trash}</button></div>`).join('');
     return `<div class="tabhead"><button class="btn sm" onclick="openPayment('${v.id}')">${ic_plus} Record payment</button></div>${rows||'<div class="lempty">No payments received yet.</div>'}`;
   }
+  if(state.tab==='log'){
+    const L=(v.log||[]).slice().sort((a,b)=> a.date===b.date ? ((b.ts||0)-(a.ts||0)) : (a.date<b.date?1:-1));
+    const rows=L.length?`<div class="loglist">${L.map(e=>`<div class="logrow"><div class="logdot ${e.kind==='note'?'note':''}"></div><div class="logbody"><div class="logdate">${fdate(e.date)}</div><div class="logtext">${esc(e.text)}</div></div><button class="del" onclick="delLog('${v.id}','${e.id}')">${ic_trash}</button></div>`).join('')}</div>`:'<div class="lempty">No log entries yet. Anything you do here — or tell the agent — is recorded, and you can add your own notes.</div>';
+    return `<div class="tabhead"><button class="btn sm" onclick="openLogNote('${v.id}')">${ic_plus} Add note</button></div>${rows}`;
+  }
   if(state.tab==='photos'){
     const ph=v.photos||[];
     const grid=ph.length?`<div class="pgrid">${ph.map(p=>`<div class="pcell"><a href="${esc(p.url)}" target="_blank" rel="noopener noreferrer"><img src="${esc(p.url)}" loading="lazy" alt="vehicle photo"></a><button class="pdel" onclick="delPhoto('${v.id}','${p.id}')">${ic_trash}</button></div>`).join('')}</div>`:'<div class="lempty">No photos yet. Add before &amp; after shots of the vehicle.</div>';
@@ -656,7 +684,13 @@ function renderTab(v){
     <button class="del" onclick="delChild('${v.id}','documents','${d.id}')">${ic_trash}</button></div>`).join('');
   return `<div class="tabhead"><button class="btn sm" onclick="openDoc('${v.id}')">${ic_plus} Add document</button></div>${rows||'<div class="lempty">No documents linked yet.</div>'}`;
 }
-function delChild(vid,kind,cid){const v=veh(vid);v[kind]=v[kind].filter(x=>x.id!==cid);save();render()}
+function delChild(vid,kind,cid){const v=veh(vid);v[kind]=v[kind].filter(x=>x.id!==cid);addLog(v,'Removed a '+kind.replace(/s$/,'')+' entry',today(),'auto');save();render()}
+function delLog(vid,eid){const v=veh(vid);v.log=(v.log||[]).filter(x=>x.id!==eid);save();render()}
+function openLogNote(vid){const v=veh(vid);
+  modal('Add log note',`<div class="fgrid">
+    <div class="field"><label>Date</label><input id="ln_date" type="date" value="${today()}"></div>
+    <div class="field full"><label>What happened?</label><input id="ln_text" placeholder="e.g. Front bumper fitted, cabin repainted, test drive done"></div>
+  </div>`,()=>{const t=val('ln_text');if(!t){alert('Write what happened.');return;}addLog(v,t,val('ln_date'),'note');save();closeModal();render();},'Add note');}
 
 /* ============ modals ============ */
 function modal(title,body,onSave,saveLabel){
@@ -698,7 +732,7 @@ function openVehicle(vid){
   </div>`,()=>{
     const rec={job:val('f_job'),reg:val('f_reg'),model:val('f_model'),status:val('f_status'),customer:val('f_customer'),phone:val('f_phone'),claimType:val('f_claimType'),insurer:val('f_insurer'),policy:val('f_policy'),claim:val('f_claim'),entry:val('f_entry'),docs:val('f_docs'),permission:val('f_permission'),expDelivery:val('f_expDelivery'),actDelivery:val('f_actDelivery'),billDate:val('f_billDate'),estimate:numval('f_estimate'),billed:numval('f_billed'),remarks:val('f_remarks')};
     if(!rec.reg&&!rec.model){alert('Add at least a registration number or model.');return}
-    if(vid){Object.assign(v,rec)}else{state.data.vehicles.unshift({id:id(),orders:[],payments:[],documents:[],...rec});}
+    if(vid){Object.assign(v,rec)}else{const nv={id:id(),orders:[],payments:[],documents:[],photos:[],log:[],...rec};nv.log.push({id:id(),date:today(),text:'Vehicle record created',kind:'auto',ts:Date.now()});state.data.vehicles.unshift(nv);}
     save();closeModal();if(!vid){state.view='detail';state.vid=state.data.vehicles[0].id;state.tab='orders'}render();
   },vid?'Save changes':'Add vehicle');
 }
@@ -707,20 +741,20 @@ function openOrder(vid){modal('Add order',`<div class="fgrid">
   <div class="field"><label>Vendor</label><input id="o_vendor"></div>
   <div class="field"><label>Amount (₹)</label><input id="o_amount" inputmode="numeric"></div>
   <div class="field"><label>Order date</label><input id="o_date" type="date" value="${today()}"></div></div>`,()=>{
-  const v=veh(vid);v.orders=v.orders||[];v.orders.push({id:id(),item:val('o_item'),vendor:val('o_vendor'),amount:numval('o_amount'),date:val('o_date')});save();closeModal();render();},'Add order');}
+  const v=veh(vid);v.orders=v.orders||[];const o={id:id(),item:val('o_item'),vendor:val('o_vendor'),amount:numval('o_amount'),date:val('o_date')};v.orders.push(o);addLog(v,'Ordered '+(o.item||'parts')+(o.amount?(' — '+inr(o.amount)):''),o.date,'auto');save();closeModal();render();},'Add order');}
 function openPayment(vid){modal('Record payment',`<div class="fgrid">
   <div class="field"><label>Payer</label><select id="p_payer"><option>Customer</option><option>Insurance</option></select></div>
   <div class="field"><label>Amount (₹)</label><input id="p_amount" inputmode="numeric"></div>
   <div class="field"><label>Mode</label><select id="p_mode"><option>Cash</option><option>Cheque</option><option>NEFT</option><option>UPI</option></select></div>
   <div class="field"><label>Date</label><input id="p_date" type="date" value="${today()}"></div>
   <div class="field full"><label>Reference</label><input id="p_ref" placeholder="UTR / cheque no."></div></div>`,()=>{
-  const v=veh(vid);v.payments=v.payments||[];v.payments.push({id:id(),payer:val('p_payer'),amount:numval('p_amount'),mode:val('p_mode'),date:val('p_date'),ref:val('p_ref')});save();closeModal();render();},'Record payment');}
+  const v=veh(vid);v.payments=v.payments||[];const p={id:id(),payer:val('p_payer'),amount:numval('p_amount'),mode:val('p_mode'),date:val('p_date'),ref:val('p_ref')};v.payments.push(p);addLog(v,'Payment — '+inr(p.amount)+' from '+p.payer+' ('+p.mode+')',p.date,'auto');save();closeModal();render();},'Record payment');}
 function openDoc(vid){const types=["RC","Insurance Policy","Driving Licence","Claim Intimation","Survey Report","Estimate","FIR / Police Report","Before Photos","After Photos","Final Bill","Payment Proof","Other"];
   modal('Add document',`<div class="fgrid">
   <div class="field"><label>Document type</label><select id="d_type">${types.map(t=>`<option>${t}</option>`).join('')}</select></div>
   <div class="field"><label>Date</label><input id="d_date" type="date" value="${today()}"></div>
   <div class="field full"><label>Google Drive link</label><input id="d_link" placeholder="https://drive.google.com/..."></div></div>`,()=>{
-  const v=veh(vid);v.documents=v.documents||[];v.documents.push({id:id(),type:val('d_type'),link:val('d_link'),date:val('d_date')});save();closeModal();render();},'Add document');}
+  const v=veh(vid);v.documents=v.documents||[];const d={id:id(),type:val('d_type'),link:val('d_link'),date:val('d_date')};v.documents.push(d);addLog(v,'Document added — '+d.type,d.date,'auto');save();closeModal();render();},'Add document');}
 
 /* ============ reconciliation ============ */
 function reconCard(v){
@@ -777,7 +811,7 @@ function resizeImage(file,max=1400,quality=0.8){
 }
 async function uploadPhotos(vid,files){
   if(!SB){alert('Photo upload needs the published cloud version (Supabase).');return;}
-  const v=veh(vid);v.photos=v.photos||[];state.uploading=true;render();let failed=0;
+  const v=veh(vid);v.photos=v.photos||[];const before=v.photos.length;state.uploading=true;render();let failed=0;
   for(const file of files){
     try{
       let blob,type='image/jpeg',ext='jpg';
@@ -790,6 +824,7 @@ async function uploadPhotos(vid,files){
     }catch(e){console.error('photo upload failed',e);failed++;}
   }
   state.uploading=false;await save();render();
+  if(v.photos.length>before)addLog(v,(v.photos.length-before)+' photo(s) added',today(),'auto');
   if(failed)alert(failed+' photo(s) failed to upload.\nUsually this means the "vehicle-photos" storage bucket or its policy isn\'t set up yet — or an iPhone HEIC photo couldn\'t be read.');
 }
 async function delPhoto(vid,pid){
@@ -806,6 +841,277 @@ document.getElementById('importfile').addEventListener('change',e=>{const f=e.ta
   r.onload=()=>{try{const d=JSON.parse(r.result);if(d&&Array.isArray(d.vehicles)){if(!confirm('This will REPLACE all '+state.data.vehicles.length+' vehicles currently in the app with '+d.vehicles.length+' from this backup file. This cannot be undone. Continue?'))return;state.data=d;save();render();alert('Data imported.')}else alert('That file does not look like a Fleet Recovery backup.')}catch{alert('Could not read that file.')}};
   r.readAsText(f);e.target.value='';});
 document.getElementById('photoInput').addEventListener('change',e=>{const vid=e.target.dataset.vid;const files=[...e.target.files];e.target.value='';if(files.length&&vid)uploadPhotos(vid,files);});
+
+/* ============ voice / command assistant ============ */
+const MONTHS={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,sept:9,oct:10,nov:11,dec:12,january:1,february:2,march:3,april:4,june:6,july:7,august:8,september:9,october:10,november:11,december:12};
+const NUMWORD='(?:zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fourty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|lakhs?|lacs?|crores?|million|billion|point|and)';
+function pad2(n){return String(n).padStart(2,'0')}
+function yesterday(){const d=new Date();d.setDate(d.getDate()-1);return d.toISOString().slice(0,10)}
+function wordsToNumber(text){
+  const SMALL={zero:0,a:1,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,twenty:20,thirty:30,forty:40,fourty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
+  const SCALE={hundred:100,thousand:1000,thousands:1000,lakh:100000,lakhs:100000,lac:100000,lacs:100000,crore:10000000,crores:10000000,million:1000000,billion:1000000000};
+  const words=text.toLowerCase().replace(/[-,]/g,' ').split(/\s+/).filter(Boolean);
+  let total=0,current=0,any=false;
+  for(let i=0;i<words.length;i++){
+    const w=words[i];
+    if(w==='and')continue;
+    if(w==='point'){let frac='0.',j=i+1;while(j<words.length&&SMALL[words[j]]!=null&&SMALL[words[j]]<10){frac+=SMALL[words[j]];j++;}
+      let base=current+(parseFloat(frac)||0);
+      if(j<words.length&&SCALE[words[j]]!=null&&SCALE[words[j]]>=1000){total+=base*SCALE[words[j]];current=0;j++;}else current=base;
+      i=j-1;any=true;continue;}
+    if(SMALL[w]!=null){current+=SMALL[w];any=true;}
+    else if(SCALE[w]!=null){const sc=SCALE[w];if(sc===100)current=(current||1)*100;else{current=current||1;total+=current*sc;current=0;}any=true;}
+    else if(any)break;
+  }
+  const v=total+current;return any?Math.round(v):null;
+}
+function ordinalToNum(w){
+  w=w.toLowerCase().replace(/-/g,' ').trim();
+  const O={first:1,second:2,third:3,fourth:4,fifth:5,sixth:6,seventh:7,eighth:8,ninth:9,tenth:10,eleventh:11,twelfth:12,thirteenth:13,fourteenth:14,fifteenth:15,sixteenth:16,seventeenth:17,eighteenth:18,nineteenth:19,twentieth:20,thirtieth:30};
+  if(O[w]!=null)return O[w];
+  const m=w.match(/^(twenty|thirty)\s+(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)$/);
+  if(m)return {twenty:20,thirty:30}[m[1]]+{first:1,second:2,third:3,fourth:4,fifth:5,sixth:6,seventh:7,eighth:8,ninth:9}[m[2]];
+  return null;
+}
+const ORDWORD='(?:(?:twenty|thirty)[ -])?(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|seventeenth|eighteenth|nineteenth|twentieth|thirtieth)';
+function extractDate(s){
+  const t=s.toLowerCase(),Y=new Date().getFullYear();
+  if(/\btoday\b/.test(t))return today();
+  if(/\byesterday\b/.test(t))return yesterday();
+  let m=t.match(/(\d{4})-(\d{2})-(\d{2})/);if(m)return m[1]+'-'+m[2]+'-'+m[3];
+  m=t.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/);
+  if(m){const d=+m[1],mo=+m[2],y=m[3]?(+m[3]<100?2000+ +m[3]:+m[3]):Y;if(d>=1&&d<=31&&mo>=1&&mo<=12)return y+'-'+pad2(mo)+'-'+pad2(d);}
+  m=t.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:of\s+)?([a-z]+)(?:\s+(\d{4}))?\b/);
+  if(m&&MONTHS[m[2]]){const d=+m[1],y=m[3]?+m[3]:Y;if(d>=1&&d<=31)return y+'-'+pad2(MONTHS[m[2]])+'-'+pad2(d);}
+  m=t.match(/\b([a-z]+)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b/);
+  if(m&&MONTHS[m[1]]){const d=+m[2],y=m[3]?+m[3]:Y;if(d>=1&&d<=31)return y+'-'+pad2(MONTHS[m[1]])+'-'+pad2(d);}
+  // word ordinal + month  ("twentieth June", "twenty first of July")
+  m=t.match(new RegExp('\\b('+ORDWORD+')\\s+(?:of\\s+)?([a-z]+)(?:\\s+(\\d{4}))?\\b','i'));
+  if(m&&MONTHS[m[2]]){const d=ordinalToNum(m[1]),y=m[3]?+m[3]:Y;if(d&&d>=1&&d<=31)return y+'-'+pad2(MONTHS[m[2]])+'-'+pad2(d);}
+  // month + word ordinal  ("June twentieth")
+  m=t.match(new RegExp('\\b([a-z]+)\\s+('+ORDWORD+')(?:\\s+(\\d{4}))?\\b','i'));
+  if(m&&MONTHS[m[1]]){const d=ordinalToNum(m[2]),y=m[3]?+m[3]:Y;if(d&&d>=1&&d<=31)return y+'-'+pad2(MONTHS[m[1]])+'-'+pad2(d);}
+  // spoken cardinal day + month  ("nine June")
+  m=t.match(new RegExp('\\b('+NUMWORD+'(?:[ -]+'+NUMWORD+')*)\\s+(?:of\\s+)?([a-z]+)\\b','i'));
+  if(m&&MONTHS[m[2]]){const d=wordsToNumber(m[1]);if(d&&d>=1&&d<=31)return Y+'-'+pad2(MONTHS[m[2]])+'-'+pad2(d);}
+  return null;
+}
+function extractAmount(s){
+  const t=s.toLowerCase();
+  const m=t.match(/(?:₹|rs\.?|inr)\s*([\d,]+(?:\.\d+)?)|([\d,]+(?:\.\d+)?)\s*(lakhs?|lac|lacs|k|thousand|crores?)|\b([\d,]{4,}(?:\.\d+)?)\b/);
+  if(m){let numStr=m[1]||m[2]||m[4];const unit=(m[3]||'').toLowerCase();
+    if(numStr){let n=parseFloat(numStr.replace(/,/g,''));if(!isNaN(n)){if(unit==='k'||unit==='thousand')n*=1000;else if(/lac|lakh/.test(unit))n*=100000;else if(/crore/.test(unit))n*=10000000;return Math.round(n);}}}
+  // spoken number words ("five lakhs", "twenty five thousand", "one point five lakh")
+  const rx=new RegExp('\\b'+NUMWORD+'(?:[ -]+'+NUMWORD+')*\\b','gi');let best=null,mm;
+  while((mm=rx.exec(t))){const v=wordsToNumber(mm[0]);if(v!=null&&v>0&&(best==null||v>best))best=v;}
+  return best;
+}
+function extractItem(cl){
+  const m=cl.match(/order(?:ed)?\s+(?:a\s+|an\s+|the\s+|some\s+|new\s+|one\s+|two\s+)?([a-z0-9 \-]+?)(?:\s+(?:worth|for|of|at|costing|priced|₹|rs)|\s+\d|$)/i);
+  if(m&&m[1]){const it=m[1].trim();if(it&&!/^(spare parts?|parts?|part)$/i.test(it))return it.charAt(0).toUpperCase()+it.slice(1);}
+  return null;
+}
+function parseCommand(text){
+  const raw=(text||'').trim();if(!raw)return {error:'Say or type a command first.'};
+  const lo=raw.toLowerCase();const digits=s=>String(s||'').replace(/\D/g,'');
+  const rxesc=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  const plan={target:null,isNew:false,newReg:'',changes:{},orders:[],payments:[],summary:[]};
+  // 1. match an existing vehicle
+  for(const v of state.data.vehicles){
+    const rd=digits(v.reg),jd=digits(v.job),tail=rd.slice(-4);
+    if((tail&&lo.replace(/\s/g,'').includes(tail))||(rd&&lo.replace(/\s/g,'').includes(rd))||(jd&&jd.length>=3&&lo.includes(jd))){plan.target=v;break;}
+  }
+  // 2. otherwise, is this a new vehicle?
+  if(!plan.target){
+    let m=raw.match(/vehicle\s+(?:number|no\.?|#)?\s*([A-Za-z0-9][A-Za-z0-9 ]*?\d)(?=\s+(?:enter|came|arriv|is|has|was|approv)|,|and|$)/i);
+    let reg=m?m[1].trim():null;
+    if(!reg){const d=lo.match(/\b([a-z]{0,2}\s*\d{3,4})\b/);if(d)reg=d[1].toUpperCase().trim();}
+    if(reg&&/enter|intake|workshop|new|arriv|came/.test(lo)){plan.isNew=true;plan.newReg=reg;plan.summary.push('Create NEW vehicle — '+reg);}
+    else return {error:'I couldn\'t tell which vehicle you meant. Mention its number (e.g. "vehicle 1234"). For a new one, say "new vehicle 1234 entered today…".'};
+  }
+  // 3. strip the vehicle reference so its number is not read as an amount or date
+  let work=raw.replace(/in the file of\s+/ig,' ').replace(/\bmark\b/ig,' ').replace(/\bvehicle\s+(?:number|no\.?|#)?\s*/ig,' ');
+  const refReg=plan.target?plan.target.reg:plan.newReg;
+  if(refReg)work=work.replace(new RegExp(rxesc(refReg),'ig'),' ');
+  const idd=digits(refReg);
+  if(idd){const tail=idd.slice(-4);if(tail)work=work.replace(new RegExp(tail,'g'),' ');work=work.replace(new RegExp(idd,'g'),' ');}
+  // 4. parse clauses
+  const clauses=work.split(/,|\band\b|\bthen\b|;|\.|\balso\b/i).map(c=>c.trim()).filter(Boolean);
+  clauses.forEach(cl=>{
+    const c=cl.toLowerCase(),date=extractDate(cl),amt=extractAmount(cl);
+    if(/\border|\bspare|\bpart|purchase|bought\b/.test(c)){
+      const it=extractItem(cl)||'Parts';plan.orders.push({item:it,amount:amt||0,date:date||today()});
+      plan.summary.push('Add order — '+it+(amt?(' · '+inr(amt)):'')+' · '+fdate(date||today()));
+    } else if(/paid|payment|received|remitt/.test(c)&&amt){
+      const payer=/insur/.test(c)?'Insurance':'Customer',mode=/upi/.test(c)?'UPI':/neft/.test(c)?'NEFT':/cheque|check/.test(c)?'Cheque':'Cash';
+      plan.payments.push({payer,amount:amt,date:date||today(),mode,ref:''});
+      plan.summary.push('Record payment — '+inr(amt)+' from '+payer+' · '+fdate(date||today()));
+    } else if(/bill/.test(c)&&amt){plan.changes.billed=amt;if(date)plan.changes.billDate=date;plan.summary.push('Set billed amount — '+inr(amt));}
+    else if(/estimat/.test(c)&&amt){plan.changes.estimate=amt;plan.summary.push('Set estimate — '+inr(amt));}
+    else{
+      if(/enter|intake|came in|workshop|arriv/.test(c)){plan.changes.entry=date||today();plan.summary.push('Intake date — '+fdate(date||today()));}
+      if(/document|papers|rc receiv/.test(c)){plan.changes.docs=date||today();plan.summary.push('Documents received — '+fdate(date||today()));}
+      if(/approv|permission|survey|sanction/.test(c)){plan.changes.permission=date||today();if(!plan.changes.status)plan.changes.status='Approved - Repair Started';plan.summary.push('Approval date — '+fdate(date||today()));}
+      if(/deliver|handed over|closed|completed/.test(c)){plan.changes.actDelivery=date||today();plan.changes.status='Closed / Delivered';plan.summary.push('Delivered — '+fdate(date||today()));}
+      if(/under repair/.test(c)){plan.changes.status='Under Repair';plan.summary.push('Status — Under Repair');}
+      else STATUSES.forEach(st=>{if(c.includes(st.toLowerCase())){plan.changes.status=st;plan.summary.push('Status — '+st);}});
+    }
+  });
+  return plan;
+}
+function applyPlan(plan){
+  let v=plan.target;
+  if(plan.isNew){v={id:id(),job:'',reg:plan.newReg||'',model:'',customer:'',phone:'',insurer:'',policy:'',claim:'',claimType:'Own Damage',entry:'',docs:'',permission:'',expDelivery:'',actDelivery:'',billDate:'',status:'Vehicle In',estimate:0,billed:0,remarks:'',orders:[],payments:[],documents:[],photos:[]};state.data.vehicles.unshift(v);}
+  if(!v)return;
+  Object.assign(v,plan.changes);
+  (plan.orders||[]).forEach(o=>{v.orders=v.orders||[];v.orders.push({id:id(),item:o.item,vendor:'',amount:o.amount,date:o.date});});
+  (plan.payments||[]).forEach(p=>{v.payments=v.payments||[];v.payments.push({id:id(),payer:p.payer,amount:p.amount,date:p.date,mode:p.mode,ref:p.ref});});
+  save();closeModal();go('detail',v.id);
+}
+/* ---- multi-vehicle agent ---- */
+function findVehicleByToken(tok){
+  if(!tok)return null;const q=tok.toLowerCase().replace(/[^a-z0-9]/g,'');if(q.length<2)return null;
+  const qd=q.replace(/[^0-9]/g,'');
+  for(const v of state.data.vehicles){
+    const regns=(v.reg||'').toLowerCase().replace(/[^a-z0-9]/g,''),rd=regns.replace(/[^0-9]/g,'');
+    if(qd.length>=3&&(rd.includes(qd)||(rd&&qd.includes(rd.slice(-4)))))return v;
+    if(q.length>=2&&regns.includes(q))return v;
+    const cust=(v.customer||'').toLowerCase().replace(/[^a-z0-9]/g,''),model=(v.model||'').toLowerCase().replace(/[^a-z0-9]/g,''),job=(v.job||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+    if(q.length>=3&&(cust.includes(q)||model.includes(q)||job.includes(q)))return v;
+  }
+  return null;
+}
+function refInClause(cl){
+  let m=cl.match(/\bvehicle\s+(?:number|no\.?|#)?\s*([a-z0-9][a-z0-9 ]*?\d|[a-z]{2,12})/i);
+  if(m){const v=findVehicleByToken(m[1].trim());if(v)return {token:m[1].trim(),vehicle:v};}
+  let m2=cl.match(/\b([a-z0-9][a-z0-9\- ]*?)\s+vehicle\b/i);
+  if(m2){const tok=m2[1].trim().split(/\s+/).pop();const v=findVehicleByToken(tok);if(v)return {token:tok,vehicle:v};}
+  const dm=(cl.match(/\b\d{3,}\b/g)||[]);for(const d of dm){const v=findVehicleByToken(d);if(v)return {token:d,vehicle:v};}
+  if(m&&/enter|intake|workshop|new|arriv|came/i.test(cl))return {token:m[1].trim(),vehicle:null,isNew:true,newReg:m[1].trim()};
+  if(m2&&/enter|intake|workshop|new|arriv|came/i.test(cl)){const tok=m2[1].trim().split(/\s+/).pop();return {token:tok,vehicle:null,isNew:true,newReg:tok};}
+  return null;
+}
+function applyClauseTo(plan,cl){
+  const c=cl.toLowerCase(),date=extractDate(cl),amt=extractAmount(cl),tgt=plan.target;
+  let acted=false,simpleVerb=null;
+  if(/\bsettle|cleared|fully paid|paid in full|clear (the )?due|close the account/.test(c)){
+    simpleVerb='settle';acted=true;const due=tgt?totals(tgt).due:0;const payer=/insur/.test(c)?'Insurance':'Customer';
+    if(due>0){plan.payments.push({payer,amount:due,date:date||today(),mode:'Cash',ref:'settlement'});plan.summary.push('Settle — record '+inr(due)+' from '+payer);}
+    else plan.summary.push('Settle — no balance outstanding to settle');
+    if(/close|deliver|handed over/.test(c)){plan.changes.status='Closed / Delivered';if(!plan.changes.actDelivery)plan.changes.actDelivery=date||today();}
+    return {acted,simpleVerb};
+  }
+  if(/\border|\bspare|\bpart|purchase|bought\b/.test(c)){const it=extractItem(cl)||'Parts';plan.orders.push({item:it,amount:amt||0,date:date||today()});plan.summary.push('Add order — '+it+(amt?(' · '+inr(amt)):'')+' · '+fdate(date||today()));return {acted:true,simpleVerb:null};}
+  if(/paid|payment|received|remitt/.test(c)&&amt){const payer=/insur/.test(c)?'Insurance':'Customer',mode=/upi/.test(c)?'UPI':/neft/.test(c)?'NEFT':/cheque|check/.test(c)?'Cheque':'Cash';plan.payments.push({payer,amount:amt,date:date||today(),mode,ref:''});plan.summary.push('Record payment — '+inr(amt)+' from '+payer+' · '+fdate(date||today()));return {acted:true,simpleVerb:null};}
+  if(/bill/.test(c)&&amt){plan.changes.billed=amt;if(date)plan.changes.billDate=date;plan.summary.push('Set billed — '+inr(amt));return {acted:true,simpleVerb:null};}
+  if(/estimat/.test(c)&&amt){plan.changes.estimate=amt;plan.summary.push('Set estimate — '+inr(amt));return {acted:true,simpleVerb:null};}
+  if(/enter|intake|came in|workshop|arriv/.test(c)){plan.changes.entry=date||today();plan.summary.push('Intake — '+fdate(date||today()));acted=true;simpleVerb='entered';}
+  if(/document|papers|rc receiv/.test(c)){plan.changes.docs=date||today();plan.summary.push('Docs received — '+fdate(date||today()));acted=true;}
+  if(/approv|permission|survey|sanction/.test(c)){plan.changes.permission=date||today();if(!plan.changes.status)plan.changes.status='Approved - Repair Started';plan.summary.push('Approved — '+fdate(date||today()));acted=true;simpleVerb='approved';}
+  if(/deliver|handed over|completed|\bclosed?\b/.test(c)){plan.changes.actDelivery=date||today();plan.changes.status='Closed / Delivered';plan.summary.push('Delivered/closed — '+fdate(date||today()));acted=true;simpleVerb='delivered';}
+  if(/under repair/.test(c)){plan.changes.status='Under Repair';plan.summary.push('Status — Under Repair');acted=true;simpleVerb='underrepair';}
+  else STATUSES.forEach(st=>{if(c.includes(st.toLowerCase())){plan.changes.status=st;plan.summary.push('Status — '+st);acted=true;}});
+  return {acted,simpleVerb};
+}
+function applyInheritedVerb(plan,verb){
+  if(verb==='settle'){const due=plan.target?totals(plan.target).due:0;if(due>0){plan.payments.push({payer:'Customer',amount:due,date:today(),mode:'Cash',ref:'settlement'});plan.summary.push('Settle — record '+inr(due)+' from Customer');}else plan.summary.push('Settle — no balance outstanding');}
+  else if(verb==='approved'){plan.changes.permission=today();if(!plan.changes.status)plan.changes.status='Approved - Repair Started';plan.summary.push('Approved — '+fdate(today()));}
+  else if(verb==='delivered'){plan.changes.actDelivery=today();plan.changes.status='Closed / Delivered';plan.summary.push('Delivered/closed — '+fdate(today()));}
+  else if(verb==='underrepair'){plan.changes.status='Under Repair';plan.summary.push('Status — Under Repair');}
+  else if(verb==='entered'){plan.changes.entry=today();plan.summary.push('Intake — '+fdate(today()));}
+}
+function parseAgent(text){
+  const raw=(text||'').trim();if(!raw)return {plans:[],errors:['Say or type a command first.']};
+  const clauses=raw.split(/,|\band\b|\bthen\b|;|\.|\balso\b/i).map(c=>c.trim()).filter(Boolean);
+  const plans=[],errors=[];let cur=null,lastSimpleVerb=null;
+  const getPlan=(vehicle,isNew,newReg)=>{
+    let pl=plans.find(p=>isNew?(p.isNew&&p.newReg===newReg):(p.target===vehicle));
+    if(!pl){pl={target:vehicle||null,isNew:!!isNew,newReg:newReg||'',changes:{},orders:[],payments:[],summary:[]};if(isNew)pl.summary.push('Create NEW vehicle — '+newReg);plans.push(pl);}
+    return pl;
+  };
+  clauses.forEach(cl=>{
+    const ref=refInClause(cl);
+    if(ref)cur=getPlan(ref.vehicle,ref.isNew,ref.newReg);
+    let cc=cl.replace(/in the file of\s+/ig,' ').replace(/\bmark\b/ig,' ').replace(/\bvehicle\s+(?:number|no\.?|#)?\s*/ig,' ');
+    if(ref&&ref.token)cc=cc.replace(new RegExp(ref.token.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'ig'),' ');
+    if(cur&&cur.target){const rd=String(cur.target.reg||'').replace(/\D/g,'');if(rd){const tail=rd.slice(-4);if(tail)cc=cc.replace(new RegExp(tail,'g'),' ');cc=cc.replace(new RegExp(rd,'g'),' ');}}
+    if(!cur){if(/[a-z0-9]/i.test(cl))errors.push('Couldn\'t identify a vehicle in: “'+cl+'”');return;}
+    const {acted,simpleVerb}=applyClauseTo(cur,cc);
+    if(simpleVerb)lastSimpleVerb=simpleVerb;
+    if(!acted&&ref&&lastSimpleVerb)applyInheritedVerb(cur,lastSimpleVerb);
+  });
+  return {plans:plans.filter(p=>p.summary.length),errors};
+}
+function applyPlanSilent(plan){
+  let v=plan.target;
+  if(plan.isNew){v={id:id(),job:'',reg:plan.newReg||'',model:'',customer:'',phone:'',insurer:'',policy:'',claim:'',claimType:'Own Damage',entry:'',docs:'',permission:'',expDelivery:'',actDelivery:'',billDate:'',status:'Vehicle In',estimate:0,billed:0,remarks:'',orders:[],payments:[],documents:[],photos:[],log:[]};state.data.vehicles.unshift(v);addLog(v,'Vehicle record created',today(),'auto');}
+  if(!v)return null;
+  Object.assign(v,plan.changes);
+  (plan.orders||[]).forEach(o=>{v.orders=v.orders||[];v.orders.push({id:id(),item:o.item,vendor:'',amount:o.amount,date:o.date});});
+  (plan.payments||[]).forEach(p=>{v.payments=v.payments||[];v.payments.push({id:id(),payer:p.payer,amount:p.amount,date:p.date,mode:p.mode||'Cash',ref:p.ref||''});});
+  logFromApply(v,plan);
+  return v.id;
+}
+function addLog(v,text,date,kind){v.log=v.log||[];v.log.push({id:id(),date:date||today(),text:text,kind:kind||'auto',ts:Date.now()+Math.random()});}
+function logFromApply(v,plan){
+  const ch=plan.changes||{},L=[];
+  if(ch.entry)L.push([ch.entry,'Vehicle entered the workshop']);
+  if(ch.docs)L.push([ch.docs,'Documents received']);
+  if(ch.permission)L.push([ch.permission,'Approved for repair']);
+  if(ch.actDelivery)L.push([ch.actDelivery,'Delivered / closed']);
+  if(ch.billed!=null)L.push([ch.billDate||today(),'Bill raised — '+inr(ch.billed)]);
+  if(ch.estimate!=null)L.push([today(),'Estimate set — '+inr(ch.estimate)]);
+  if(ch.status&&!ch.actDelivery&&!ch.permission)L.push([today(),'Status → '+ch.status]);
+  (plan.orders||[]).forEach(o=>L.push([o.date||today(),'Ordered '+(o.item||'parts')+(o.amount?(' — '+inr(o.amount)):'')]));
+  (plan.payments||[]).forEach(p=>L.push([p.date||today(),(p.ref==='settlement'?'Settled — ':'Payment — ')+inr(p.amount)+' from '+p.payer]));
+  L.forEach(([d,t])=>addLog(v,t,d,'auto'));
+}
+let _recog=null,_micOn=false;
+function openAssistant(){
+  document.getElementById('modal-root').innerHTML=`<div class="scrim" id="scrim"><div class="modal" style="max-width:560px">
+    <div class="mh"><h3>${ic_sparkle} Talk to add or update</h3><button class="x" onclick="closeModal()">${ic_x}</button></div>
+    <div class="mbody">
+      <div style="display:flex;gap:10px;align-items:flex-start">
+        <textarea id="cmdText" rows="3" placeholder="e.g. Ordered parts for EBC vehicle worth five lakhs, ordered parts for CBE vehicle worth ten lakhs, settle vehicle 1234" style="flex:1;padding:12px;border:1px solid var(--line2);border-radius:10px;background:var(--bg1);color:var(--text);font-family:inherit;font-size:14px;resize:vertical"></textarea>
+        <button id="micBtn" class="btn ghost" onclick="toggleVoice()" style="flex:none;width:46px;height:46px;padding:0;justify-content:center">${ic_mic}</button>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin-top:12px"><button class="btn ghost sm" onclick="interpret()">Interpret</button><span id="cmdHint" style="font-size:12px;color:var(--muted)">Update one or many vehicles in a single command.</span></div>
+      <div id="cmdPreview" style="margin-top:14px"></div>
+    </div>
+    <div class="mfoot"><button class="btn ghost" onclick="closeModal()">Cancel</button><button class="btn" id="applyBtn" onclick="applyCurrent()" style="display:none">Apply changes</button></div></div></div>`;
+  document.getElementById('scrim').addEventListener('mousedown',e=>{if(e.target.id==='scrim'){if(_recog)_recog.stop();closeModal();}});
+  window._plans=null;
+}
+function interpret(){
+  const res=parseAgent(document.getElementById('cmdText').value);window._plans=res.plans;
+  const pv=document.getElementById('cmdPreview'),applyBtn=document.getElementById('applyBtn');
+  let html='';
+  if(res.errors.length)html+=res.errors.map(e=>`<div class="verdict bad" style="margin-bottom:10px"><div class="vi">${ic_alert}</div><div class="vt"><b>${esc(e)}</b></div></div>`).join('');
+  if(res.plans.length){
+    html+=res.plans.map(p=>{const who=p.isNew?('New vehicle '+esc(p.newReg||'')):(esc(p.target.reg)+(p.target.model?' — '+esc(p.target.model):''));
+      return `<div class="verdict info" style="margin-bottom:10px"><div class="vi">${ic_scale}</div><div class="vt"><b>${who}</b><ul style="margin:8px 0 0;padding-left:18px">${p.summary.map(s=>`<li style="font-size:13px;color:var(--text2);margin-top:4px">${esc(s)}</li>`).join('')}</ul></div></div>`;}).join('');
+    html+=`<div style="font-size:12px;color:var(--muted);margin-top:2px">${res.plans.length} vehicle${res.plans.length>1?'s':''} will be updated. Check, then Apply.</div>`;
+  } else if(!res.errors.length){html=`<div class="verdict info"><div class="vi">${ic_scale}</div><div class="vt"><b>Nothing recognised to change — try rephrasing.</b></div></div>`;}
+  pv.innerHTML=html;
+  applyBtn.style.display=res.plans.length?'inline-flex':'none';
+  applyBtn.textContent=res.plans.length>1?('Apply to '+res.plans.length+' vehicles'):'Apply changes';
+}
+function applyCurrent(){
+  const plans=(window._plans||[]);if(!plans.length)return;
+  let firstId=null;plans.forEach(p=>{const vid=applyPlanSilent(p);if(!firstId)firstId=vid;});
+  save();closeModal();if(firstId)go('detail',firstId);else render();
+}
+function setMic(on){_micOn=on;const b=document.getElementById('micBtn'),h=document.getElementById('cmdHint');if(b){b.style.background=on?'var(--red)':'';b.style.color=on?'#fff':'';}if(h)h.textContent=on?'Listening… speak now, it stops when you pause':'';}
+function toggleVoice(){
+  if(_micOn){if(_recog)_recog.stop();return;}
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){document.getElementById('cmdHint').textContent='Voice not supported in this browser — type instead (Chrome works best).';return;}
+  _recog=new SR();_recog.lang='en-IN';_recog.interimResults=true;_recog.continuous=false;
+  _recog.onresult=e=>{let t='';for(const r of e.results)t+=r[0].transcript;document.getElementById('cmdText').value=t;};
+  _recog.onend=()=>{setMic(false);interpret();};
+  _recog.onerror=ev=>{setMic(false);const h=document.getElementById('cmdHint');if(h)h.textContent='Mic error'+(ev.error?': '+ev.error:'')+' — you can type instead.';};
+  try{_recog.start();setMic(true);}catch(e){setMic(false);}
+}
 
 /* ============ icons ============ */
 function ico(p,extra){return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${extra||''}>${p}</svg>`}
@@ -835,6 +1141,8 @@ const ic_slip=ico('<path d="M5 4h14v16l-2.5-1.5L14 20l-2-1.5L10 20l-2.5-1.5L5 20
 const ic_view=ico('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>');
 const ic_paperclip=ico('<path d="M21 8l-9.5 9.5a4 4 0 01-5.7-5.7L14 4a2.5 2.5 0 013.5 3.5L9 16"/>');
 const ic_camera=ico('<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>');
+const ic_mic=ico('<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0M12 17v4M8 21h8"/>');
+const ic_sparkle=ico('<path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5 10.1 7.6z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>');
 
 init();
 </script>
