@@ -308,6 +308,13 @@
   .logtext{font-size:13.5px;margin-top:2px;color:var(--text)}
   .logrow .del{opacity:0;color:var(--muted);align-self:center;transition:.12s}
   .logrow:hover .del{opacity:1} .logrow .del:hover{color:var(--red)} .logrow .del svg{width:14px;height:14px}
+  /* advisor markdown */
+  .md h3{font-family:'Space Grotesk';font-size:14.5px;font-weight:600;margin:14px 0 6px;color:var(--text)}
+  .md h3:first-child{margin-top:0}
+  .md p{font-size:13.5px;color:var(--text2);margin:6px 0;line-height:1.55}
+  .md ul{margin:6px 0;padding-left:20px}
+  .md li{font-size:13.5px;color:var(--text2);margin:4px 0;line-height:1.5}
+  .md b{color:var(--text);font-weight:600}
   .fab{position:fixed;bottom:26px;right:26px;width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;
     background:linear-gradient(145deg,var(--amber2),var(--amber));color:#1a1400;display:grid;place-items:center;
     box-shadow:0 10px 30px rgba(255,176,32,.45);z-index:40;transition:.18s}
@@ -353,7 +360,7 @@
 
 <script>
 /* ============ CONFIG — paste your two Supabase values here ============ */
-const SUPABASE_URL='https://ilhgyawcycxzxfiyezlo.supabase.co';        // e.g. https://abcdefg.supabase.co
+const SUPABASE_URL='https://ilhgyawcycxzxfiyezlo.supabase.co';         // e.g. https://abcdefg.supabase.co
 const SUPABASE_KEY='sb_publishable_vjYM_9AAdbRp-MY4yxJetw_WX1A-bO3';   // the "anon public" key
 const SB=(window.supabase && SUPABASE_URL && SUPABASE_URL.indexOf('YOUR_')<0)
   ? window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY) : null;
@@ -433,6 +440,7 @@ function today(){return new Date().toISOString().slice(0,10)}
 function daysInShop(v){if(v.actDelivery&&v.entry)return Math.max(0,Math.floor((new Date(v.actDelivery)-new Date(v.entry))/86400000));return daysSince(v.entry)}
 function recvDays(v){const base=v.billDate||v.actDelivery||v.expDelivery||v.entry;return daysSince(base)}
 function capitalBlocked(v){const t=totals(v);const blocked=Math.max(0,t.ordered-t.received);const dates=(v.orders||[]).map(o=>o.date).filter(Boolean).sort();const since=dates[0]||'';return {blocked,days:since?daysSince(since):0,since};}
+function receivedBy(v,payer){return (v.payments||[]).filter(p=>p.payer===payer).reduce((s,p)=>s+Number(p.amount||0),0);}
 function ageCls(d){return d<=15?'a0':d<=30?'a1':d<=60?'a2':'a3'}
 function insurerName(v){return v.claimType==='Cash'?'Cash / Direct':(v.insurer||'Unspecified')}
 function moneyBadge(v){const t=totals(v);
@@ -448,6 +456,7 @@ function navItems(){return [
   ['receivables','Receivables',ic_wallet],
   ['insurer','By Insurer',ic_shield],
   ['aging','Aging',ic_hour],
+  ['advisor','Advisor',ic_bulb],
 ];}
 function renderNav(){
   const due=state.data.vehicles.reduce((s,v)=>s+(totals(v).due>0?1:0),0);
@@ -467,6 +476,7 @@ function render(){
   else if(state.view==='receivables')el.innerHTML=viewReceivables();
   else if(state.view==='insurer')el.innerHTML=viewInsurer();
   else if(state.view==='aging')el.innerHTML=viewAging();
+  else if(state.view==='advisor')el.innerHTML=viewAdvisor();
   else if(state.view==='detail'){el.innerHTML=viewDetail();requestAnimationFrame(animateBars);}
 }
 document.getElementById('view').addEventListener('click',e=>{const tb=e.target.closest('#tabs button');if(tb){state.tab=tb.dataset.tab;render()}});
@@ -614,6 +624,55 @@ function viewAging(){
   :'<div class="lempty">No vehicles currently in the shop.</div>'}</div>`;
 }
 
+/* ============ advisor (AI) ============ */
+function mdToHtml(md){
+  const lines=String(md||'').split('\n');let out='',inList=false;
+  const closeList=()=>{if(inList){out+='</ul>';inList=false;}};
+  for(const raw of lines){
+    const trimmed=raw.trim();
+    if(!trimmed){closeList();continue;}
+    let line=esc(trimmed).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
+    if(/^#{1,6}\s/.test(trimmed)){closeList();out+='<h3>'+line.replace(/^#{1,6}\s+/,'')+'</h3>';continue;}
+    if(/^[-*]\s/.test(trimmed)){if(!inList){out+='<ul>';inList=true;}out+='<li>'+line.replace(/^[-*]\s+/,'')+'</li>';continue;}
+    if(/^\d+[.)]\s/.test(trimmed)){if(!inList){out+='<ul>';inList=true;}out+='<li>'+line.replace(/^\d+[.)]\s+/,'')+'</li>';continue;}
+    closeList();out+='<p>'+line+'</p>';
+  }
+  closeList();return '<div class="md">'+out+'</div>';
+}
+function viewAdvisor(){
+  const hist=(state.data.advisories||[]);
+  const cloud=!!SB;
+  return `<div class="topbar"><div><div class="h">Advisor</div><div class="sub">Ask anything about your vehicles, or plan how to allocate funds</div></div></div>
+  <div class="card"><div style="padding:18px">
+    <textarea id="advText" rows="3" placeholder="e.g. I have ₹3 lakh available this week — which vehicles should I order parts for first to recover money fastest?  ·  How much is ICICI Lombard owing me across all vehicles?  ·  Which jobs have my cash stuck the longest?" style="width:100%;padding:12px;border:1px solid var(--line2);border-radius:10px;background:var(--bg1);color:var(--text);font-family:inherit;font-size:14px;resize:vertical"></textarea>
+    <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+      <button class="btn" onclick="askAdvisor()" id="advBtn">${ic_sparkle} Get plan</button>
+      <button class="btn ghost sm" onclick="quickAdvisor('Give me a short daily briefing: what needs my attention today across all vehicles, ranked by urgency.')">Daily briefing</button>
+      <button class="btn ghost sm" onclick="quickAdvisor('Which vehicles have my own capital blocked the longest, and what should I chase or bill to free up cash fastest?')">Free up cash</button>
+      <button class="btn ghost sm" onclick="quickAdvisor('Summarise how much each insurer owes me across all vehicles, largest first.')">Insurer dues</button>
+    </div>
+    ${cloud?'':'<div style="margin-top:12px;font-size:12.5px;color:var(--amber)">The advisor runs on the published cloud app with your AI backend connected.</div>'}
+    <div id="advOut" style="margin-top:16px"></div>
+  </div></div>
+  ${hist.length?`<div class="sectlabel">Recent</div>`+hist.slice(0,10).map(a=>`<div class="card" style="margin-bottom:12px"><div class="ch"><h3>${ic_sparkle} ${esc(a.prompt.slice(0,90))}${a.prompt.length>90?'…':''}</h3><span class="cnt">${fdate(a.date)} <span onclick="delAdvisory('${a.id}')" style="cursor:pointer;margin-left:8px;color:var(--muted)">✕</span></span></div><div style="padding:4px 18px 16px">${mdToHtml(a.advice)}</div></div>`).join(''):''}`;
+}
+function quickAdvisor(q){const el=document.getElementById('advText');if(el)el.value=q;askAdvisor();}
+function delAdvisory(aid){state.data.advisories=(state.data.advisories||[]).filter(a=>a.id!==aid);save();render();}
+async function askAdvisor(){
+  const el=document.getElementById('advText');const text=(el?el.value:'').trim();if(!text)return;
+  const out=document.getElementById('advOut'),btn=document.getElementById('advBtn');
+  if(!SB){out.innerHTML=`<div class="verdict bad"><div class="vi">${ic_alert}</div><div class="vt"><b>The advisor needs the published cloud app with your AI backend.</b></div></div>`;return;}
+  if(btn)btn.disabled=true;out.innerHTML=`<div class="verdict info"><div class="vi">${ic_scale}</div><div class="vt"><b>Thinking…</b></div></div>`;
+  try{
+    const snap=state.data.vehicles.map(v=>{const t=totals(v),cb=capitalBlocked(v);return {reg:v.reg,model:v.model,customer:v.customer,insurer:v.claimType==='Cash'?'Cash / Direct':v.insurer,status:v.status,estimate:Number(v.estimate||0),ordered:t.ordered,billed:t.billed,received:t.received,due:t.due,blocked:cb.blocked,blockedDays:cb.days};});
+    const {data,error}=await SB.functions.invoke('agent',{body:{mode:'advise',text,vehicles:snap,today:today()}});
+    if(error)throw error;
+    const advice=(data&&data.advice)||'No response received.';
+    state.data.advisories=state.data.advisories||[];state.data.advisories.unshift({id:id(),date:today(),prompt:text,advice});
+    await save();render();
+  }catch(e){if(out)out.innerHTML=`<div class="verdict bad"><div class="vi">${ic_alert}</div><div class="vt"><b>Couldn't get a response.</b><div style="font-size:12px;margin-top:4px;color:var(--muted)">${esc(e.message||String(e))}</div></div></div>`;if(btn)btn.disabled=false;}
+}
+
 /* ============ detail ============ */
 function viewDetail(){
   const v=veh(state.vid);if(!v)return '';
@@ -640,6 +699,7 @@ function viewDetail(){
   <div class="tabs" id="tabs">
     <button data-tab="orders" class="${state.tab==='orders'?'active':''}">Orders <span class="num">(${(v.orders||[]).length})</span></button>
     <button data-tab="payments" class="${state.tab==='payments'?'active':''}">Payments <span class="num">(${(v.payments||[]).length})</span></button>
+    <button data-tab="balance" class="${state.tab==='balance'?'active':''}">Balance</button>
     <button data-tab="documents" class="${state.tab==='documents'?'active':''}">Documents <span class="num">(${(v.documents||[]).length})</span></button>
     <button data-tab="photos" class="${state.tab==='photos'?'active':''}">Photos <span class="num">(${(v.photos||[]).length})</span></button>
     <button data-tab="log" class="${state.tab==='log'?'active':''}">Log <span class="num">(${(v.log||[]).length})</span></button>
@@ -666,6 +726,29 @@ function renderTab(v){
       <button class="del" onclick="delChild('${v.id}','payments','${p.id}')">${ic_trash}</button></div>`).join('');
     return `<div class="tabhead"><button class="btn sm" onclick="openPayment('${v.id}')">${ic_plus} Record payment</button></div>${rows||'<div class="lempty">No payments received yet.</div>'}`;
   }
+  if(state.tab==='balance'){
+    const t=totals(v);
+    const rcCust=receivedBy(v,'Customer'),rcIns=receivedBy(v,'Insurance');
+    const custShare=Number(v.custShare||0),insShare=Number(v.insShare||0);
+    const diffEst=(t.billed&&v.estimate)?(t.billed-Number(v.estimate)):0;
+    const partyRow=(name,share,paid)=>{const toRec=share>0?Math.max(0,share-paid):null;
+      return `<tr><td style="font-weight:600">${name}</td><td class="r mono">${share>0?inr(share):'<span style="color:var(--muted)">—</span>'}</td><td class="r mono" style="color:var(--green)">${inr(paid)}</td><td class="r mono" style="${toRec>0?'color:var(--red);font-weight:700':'color:var(--muted)'}">${toRec!=null?inr(toRec):'—'}</td></tr>`;};
+    return `<div style="padding:18px">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+        <div><div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600">Still to receive</div><div style="font-family:'Space Grotesk';font-size:34px;font-weight:700;color:${t.due>0?'var(--red)':'var(--green)'};letter-spacing:-1px;line-height:1">${inr(t.due)}</div></div>
+        <button class="btn ghost sm" onclick="openSplit('${v.id}')">${ic_edit} Set customer / insurer split</button>
+      </div>
+      <div class="fin" style="margin-bottom:16px">
+        <div class="fcard"><div class="lab">Billed</div><div class="v num">${inr(t.billed)}</div></div>
+        <div class="fcard"><div class="lab">Received</div><div class="v num green">${inr(t.received)}</div></div>
+        <div class="fcard"><div class="lab">To receive</div><div class="v num ${t.due>0?'red':'green'}">${inr(t.due)}</div></div>
+      </div>
+      <div class="card" style="box-shadow:none;border-radius:14px"><table class="tbl"><thead><tr><th>Party</th><th class="r">Expected share</th><th class="r">Received</th><th class="r">Still to receive</th></tr></thead><tbody>${partyRow('Customer',custShare,rcCust)}${partyRow('Insurance',insShare,rcIns)}</tbody></table></div>
+      ${(custShare>0||insShare>0)&&(custShare+insShare!==t.billed)&&t.billed>0?`<div style="margin-top:10px;font-size:12px;color:var(--amber)">Heads up: the split (${inr(custShare+insShare)}) doesn't add up to the billed amount (${inr(t.billed)}).</div>`:''}
+      ${diffEst?`<div style="margin-top:14px;padding:12px 16px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid var(--line);font-size:13px">Final bill is <b>${inr(Math.abs(diffEst))}</b> ${diffEst>0?'higher':'lower'} than the original estimate of ${inr(v.estimate)}.</div>`:''}
+      ${(!custShare&&!insShare)?`<div style="margin-top:12px;font-size:12px;color:var(--muted)">Tip: set the customer/insurer split above to see exactly how much each party still owes. Until then, the total to-receive and each party's payments so far are shown.</div>`:''}
+    </div>`;
+  }
   if(state.tab==='log'){
     const L=(v.log||[]).slice().sort((a,b)=> a.date===b.date ? ((b.ts||0)-(a.ts||0)) : (a.date<b.date?1:-1));
     const rows=L.length?`<div class="loglist">${L.map(e=>`<div class="logrow"><div class="logdot ${e.kind==='note'?'note':''}"></div><div class="logbody"><div class="logdate">${fdate(e.date)}</div><div class="logtext">${esc(e.text)}</div></div><button class="del" onclick="delLog('${v.id}','${e.id}')">${ic_trash}</button></div>`).join('')}</div>`:'<div class="lempty">No log entries yet. Anything you do here — or tell the agent — is recorded, and you can add your own notes.</div>';
@@ -691,6 +774,12 @@ function openLogNote(vid){const v=veh(vid);
     <div class="field"><label>Date</label><input id="ln_date" type="date" value="${today()}"></div>
     <div class="field full"><label>What happened?</label><input id="ln_text" placeholder="e.g. Front bumper fitted, cabin repainted, test drive done"></div>
   </div>`,()=>{const t=val('ln_text');if(!t){alert('Write what happened.');return;}addLog(v,t,val('ln_date'),'note');save();closeModal();render();},'Add note');}
+function openSplit(vid){const v=veh(vid);const t=totals(v);
+  modal('Customer / insurer split',`<div class="fgrid">
+    <div class="field"><label>Customer's share of the bill (₹)</label><input id="sp_cust" inputmode="numeric" value="${v.custShare||''}"></div>
+    <div class="field"><label>Insurer's share of the bill (₹)</label><input id="sp_ins" inputmode="numeric" value="${v.insShare||''}"></div>
+    <div class="field full"><div style="font-size:12px;color:var(--muted)">Billed total is ${inr(t.billed)}. Split it by who is meant to pay what — the tracker then shows how much each still owes.</div></div>
+  </div>`,()=>{v.custShare=numval('sp_cust');v.insShare=numval('sp_ins');save();closeModal();render();},'Save split');}
 
 /* ============ modals ============ */
 function modal(title,body,onSave,saveLabel){
@@ -1082,24 +1171,65 @@ function openAssistant(){
   document.getElementById('scrim').addEventListener('mousedown',e=>{if(e.target.id==='scrim'){if(_recog)_recog.stop();closeModal();}});
   window._plans=null;
 }
-function interpret(){
-  const res=parseAgent(document.getElementById('cmdText').value);window._plans=res.plans;
+async function interpret(){
+  const text=document.getElementById('cmdText').value.trim();
+  const pv=document.getElementById('cmdPreview'),applyBtn=document.getElementById('applyBtn');
+  if(!text){pv.innerHTML='';applyBtn.style.display='none';return;}
+  applyBtn.style.display='none';
+  pv.innerHTML=`<div class="verdict info"><div class="vi">${ic_scale}</div><div class="vt"><b>Reading your note…</b></div></div>`;
+  let aiRes=null;
+  if(SB){
+    try{
+      const slim=state.data.vehicles.map(v=>({id:v.id,reg:v.reg,model:v.model,customer:v.customer,status:v.status}));
+      const {data,error}=await SB.functions.invoke('agent',{body:{text,vehicles:slim,today:today()}});
+      if(error)throw error;aiRes=data;
+    }catch(e){console.error('AI agent unavailable, using offline parser',e);}
+  }
+  if(aiRes&&(aiRes.plans||aiRes.errors)){
+    window._plans=aiRes.plans||[];window._plansMode='ai';
+    renderAgentPreview(aiRes.plans||[],aiRes.errors||[],'ai',false);
+  } else {
+    const local=parseAgent(text);window._plans=local.plans;window._plansMode='local';
+    renderAgentPreview(local.plans,local.errors,'local',true);
+  }
+}
+function renderAgentPreview(plans,errors,mode,offline){
   const pv=document.getElementById('cmdPreview'),applyBtn=document.getElementById('applyBtn');
   let html='';
-  if(res.errors.length)html+=res.errors.map(e=>`<div class="verdict bad" style="margin-bottom:10px"><div class="vi">${ic_alert}</div><div class="vt"><b>${esc(e)}</b></div></div>`).join('');
-  if(res.plans.length){
-    html+=res.plans.map(p=>{const who=p.isNew?('New vehicle '+esc(p.newReg||'')):(esc(p.target.reg)+(p.target.model?' — '+esc(p.target.model):''));
-      return `<div class="verdict info" style="margin-bottom:10px"><div class="vi">${ic_scale}</div><div class="vt"><b>${who}</b><ul style="margin:8px 0 0;padding-left:18px">${p.summary.map(s=>`<li style="font-size:13px;color:var(--text2);margin-top:4px">${esc(s)}</li>`).join('')}</ul></div></div>`;}).join('');
-    html+=`<div style="font-size:12px;color:var(--muted);margin-top:2px">${res.plans.length} vehicle${res.plans.length>1?'s':''} will be updated. Check, then Apply.</div>`;
-  } else if(!res.errors.length){html=`<div class="verdict info"><div class="vi">${ic_scale}</div><div class="vt"><b>Nothing recognised to change — try rephrasing.</b></div></div>`;}
+  if(errors&&errors.length)html+=errors.map(e=>`<div class="verdict bad" style="margin-bottom:10px"><div class="vi">${ic_alert}</div><div class="vt"><b>${esc(e)}</b></div></div>`).join('');
+  if(plans&&plans.length){
+    html+=plans.map(p=>{
+      let who,summary;
+      if(mode==='ai'){const mv=p.match?veh(p.match):null;who=p.isNew?('New vehicle '+esc((p.fields&&p.fields.reg)||'')):(mv?esc(mv.reg+(mv.model?' — '+mv.model:'')):'Vehicle');summary=p.summary||[];}
+      else{who=p.isNew?('New vehicle '+esc(p.newReg||'')):(esc(p.target.reg)+(p.target.model?' — '+esc(p.target.model):''));summary=p.summary||[];}
+      return `<div class="verdict info" style="margin-bottom:10px"><div class="vi">${ic_scale}</div><div class="vt"><b>${who}</b><ul style="margin:8px 0 0;padding-left:18px">${summary.map(s=>`<li style="font-size:13px;color:var(--text2);margin-top:4px">${esc(s)}</li>`).join('')}</ul></div></div>`;
+    }).join('');
+    html+=`<div style="font-size:12px;color:var(--muted);margin-top:2px">${plans.length} vehicle${plans.length>1?'s':''} will be updated.${offline?' <span style="color:var(--amber)">(offline mode — AI unavailable, using basic parser)</span>':''} Check, then Apply.</div>`;
+  } else if(!errors||!errors.length){html+=`<div class="verdict info"><div class="vi">${ic_scale}</div><div class="vt"><b>Nothing recognised to change — try rephrasing.</b></div></div>`;}
   pv.innerHTML=html;
-  applyBtn.style.display=res.plans.length?'inline-flex':'none';
-  applyBtn.textContent=res.plans.length>1?('Apply to '+res.plans.length+' vehicles'):'Apply changes';
+  applyBtn.style.display=(plans&&plans.length)?'inline-flex':'none';
+  applyBtn.textContent=(plans&&plans.length>1)?('Apply to '+plans.length+' vehicles'):'Apply changes';
 }
 function applyCurrent(){
   const plans=(window._plans||[]);if(!plans.length)return;
-  let firstId=null;plans.forEach(p=>{const vid=applyPlanSilent(p);if(!firstId)firstId=vid;});
+  let firstId=null;plans.forEach(p=>{const vid=(window._plansMode==='ai')?applyAIPlan(p):applyPlanSilent(p);if(!firstId&&vid)firstId=vid;});
   save();closeModal();if(firstId)go('detail',firstId);else render();
+}
+function applyAIPlan(plan){
+  let v=(!plan.isNew&&plan.match)?veh(plan.match):null;
+  if(!v){v={id:id(),job:'',reg:'',model:'',customer:'',phone:'',insurer:'',policy:'',claim:'',claimType:'Own Damage',entry:'',docs:'',permission:'',expDelivery:'',actDelivery:'',billDate:'',status:'Vehicle In',estimate:0,billed:0,custShare:0,insShare:0,remarks:'',orders:[],payments:[],documents:[],photos:[],log:[]};state.data.vehicles.unshift(v);addLog(v,'Vehicle record created',today(),'auto');}
+  const f=plan.fields||{};
+  ['reg','model','customer','phone','insurer','policy','claim','claimType','entry','docs','permission','expDelivery','actDelivery','billDate','status','estimate','billed','custShare','insShare','remarks'].forEach(k=>{if(f[k]!==undefined&&f[k]!==''&&f[k]!==null)v[k]=f[k];});
+  if(f.entry)addLog(v,'Vehicle entered the workshop',f.entry,'auto');
+  if(f.permission)addLog(v,'Approved for repair',f.permission,'auto');
+  if(f.actDelivery)addLog(v,'Delivered / closed',f.actDelivery,'auto');
+  if(f.status)addLog(v,'Status → '+f.status,today(),'auto');
+  if(f.billed!==undefined&&f.billed!==''&&f.billed!==null)addLog(v,'Bill raised — '+inr(f.billed),f.billDate||today(),'auto');
+  (plan.orders||[]).forEach(o=>{v.orders=v.orders||[];v.orders.push({id:id(),item:o.item||'Parts',vendor:o.vendor||'',amount:Number(o.amount)||0,date:o.date||today()});addLog(v,'Ordered '+(o.item||'parts')+(o.amount?(' — '+inr(o.amount)):''),o.date||today(),'auto');});
+  (plan.payments||[]).forEach(p=>{v.payments=v.payments||[];v.payments.push({id:id(),payer:p.payer||'Customer',amount:Number(p.amount)||0,mode:p.mode||'Cash',date:p.date||today(),ref:p.ref||''});addLog(v,'Payment — '+inr(p.amount)+' from '+(p.payer||'Customer'),p.date||today(),'auto');});
+  if(plan.settle){const due=totals(v).due;if(due>0){v.payments.push({id:id(),payer:'Customer',amount:due,mode:'Cash',date:today(),ref:'settlement'});addLog(v,'Settled — '+inr(due),today(),'auto');}}
+  (plan.notes||[]).forEach(n=>{if(n&&String(n).trim())addLog(v,String(n).trim(),today(),'note');});
+  return v.id;
 }
 function setMic(on){_micOn=on;const b=document.getElementById('micBtn'),h=document.getElementById('cmdHint');if(b){b.style.background=on?'var(--red)':'';b.style.color=on?'#fff':'';}if(h)h.textContent=on?'Listening… speak now, it stops when you pause':'';}
 function toggleVoice(){
@@ -1143,6 +1273,7 @@ const ic_paperclip=ico('<path d="M21 8l-9.5 9.5a4 4 0 01-5.7-5.7L14 4a2.5 2.5 0 
 const ic_camera=ico('<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/>');
 const ic_mic=ico('<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0M12 17v4M8 21h8"/>');
 const ic_sparkle=ico('<path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5 10.1 7.6z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>');
+const ic_bulb=ico('<path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.7.7 1 1.2 1 2.5h6c0-1.3.3-1.8 1-2.5A6 6 0 0012 3z"/>');
 
 init();
 </script>
