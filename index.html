@@ -315,6 +315,8 @@
   .md ul{margin:6px 0;padding-left:20px}
   .md li{font-size:13.5px;color:var(--text2);margin:4px 0;line-height:1.5}
   .md b{color:var(--text);font-weight:600}
+  .dbact{display:inline-flex;gap:12px;align-items:center;justify-content:flex-end}
+  .dbact svg{width:15px;height:15px}
   .fab{position:fixed;bottom:26px;right:26px;width:58px;height:58px;border-radius:50%;border:none;cursor:pointer;
     background:linear-gradient(145deg,var(--amber2),var(--amber));color:#1a1400;display:grid;place-items:center;
     box-shadow:0 10px 30px rgba(255,176,32,.45);z-index:40;transition:.18s}
@@ -360,7 +362,7 @@
 
 <script>
 /* ============ CONFIG — paste your two Supabase values here ============ */
-const SUPABASE_URL='https://ilhgyawcycxzxfiyezlo.supabase.co';         // e.g. https://abcdefg.supabase.co
+const SUPABASE_URL='https://ilhgyawcycxzxfiyezlo.supabase.co';        // e.g. https://abcdefg.supabase.co
 const SUPABASE_KEY='sb_publishable_vjYM_9AAdbRp-MY4yxJetw_WX1A-bO3';   // the "anon public" key
 const SB=(window.supabase && SUPABASE_URL && SUPABASE_URL.indexOf('YOUR_')<0)
   ? window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY) : null;
@@ -457,6 +459,7 @@ function navItems(){return [
   ['insurer','By Insurer',ic_shield],
   ['aging','Aging',ic_hour],
   ['advisor','Advisor',ic_bulb],
+  ['debtors','Debtors',ic_users],
 ];}
 function renderNav(){
   const due=state.data.vehicles.reduce((s,v)=>s+(totals(v).due>0?1:0),0);
@@ -477,6 +480,7 @@ function render(){
   else if(state.view==='insurer')el.innerHTML=viewInsurer();
   else if(state.view==='aging')el.innerHTML=viewAging();
   else if(state.view==='advisor')el.innerHTML=viewAdvisor();
+  else if(state.view==='debtors')el.innerHTML=viewDebtors();
   else if(state.view==='detail'){el.innerHTML=viewDetail();requestAnimationFrame(animateBars);}
 }
 document.getElementById('view').addEventListener('click',e=>{const tb=e.target.closest('#tabs button');if(tb){state.tab=tb.dataset.tab;render()}});
@@ -665,13 +669,63 @@ async function askAdvisor(){
   if(btn)btn.disabled=true;out.innerHTML=`<div class="verdict info"><div class="vi">${ic_scale}</div><div class="vt"><b>Thinking…</b></div></div>`;
   try{
     const snap=state.data.vehicles.map(v=>{const t=totals(v),cb=capitalBlocked(v);return {reg:v.reg,model:v.model,customer:v.customer,insurer:v.claimType==='Cash'?'Cash / Direct':v.insurer,status:v.status,estimate:Number(v.estimate||0),ordered:t.ordered,billed:t.billed,received:t.received,due:t.due,blocked:cb.blocked,blockedDays:cb.days};});
-    const {data,error}=await SB.functions.invoke('agent',{body:{mode:'advise',text,vehicles:snap,today:today()}});
+    const debtorSnap=(state.data.debtors||[]).filter(d=>!d.settled).map(d=>({name:d.name,amount:Number(d.amount||0),days:daysSince(d.date),note:d.note||'General',vehicle:d.vehicle||'',billNo:d.billNo||''}));
+    const {data,error}=await SB.functions.invoke('agent',{body:{mode:'advise',text,vehicles:snap,debtors:debtorSnap,today:today()}});
     if(error)throw error;
     const advice=(data&&data.advice)||'No response received.';
     state.data.advisories=state.data.advisories||[];state.data.advisories.unshift({id:id(),date:today(),prompt:text,advice});
     await save();render();
   }catch(e){if(out)out.innerHTML=`<div class="verdict bad"><div class="vi">${ic_alert}</div><div class="vt"><b>Couldn't get a response.</b><div style="font-size:12px;margin-top:4px;color:var(--muted)">${esc(e.message||String(e))}</div></div></div>`;if(btn)btn.disabled=false;}
 }
+
+/* ============ debtors ============ */
+function viewDebtors(){
+  const gen=(state.data.debtors||[]).filter(d=>!d.settled);
+  const genDue=gen.reduce((s,d)=>s+Number(d.amount||0),0);
+  const accRows=state.data.vehicles.filter(v=>totals(v).due>0).map(v=>({type:'Accident',name:v.customer||'—',vehicle:v.reg,billNo:'',amount:totals(v).due,days:recvDays(v),vid:v.id}));
+  const accDue=accRows.reduce((s,r)=>s+r.amount,0);
+  const market=genDue+accDue;
+  const genRows=gen.map(d=>({type:d.note||'General',name:d.name,vehicle:d.vehicle||'',billNo:d.billNo||'',amount:Number(d.amount||0),days:daysSince(d.date),did:d.id}));
+  const all=[...accRows,...genRows].sort((a,b)=>b.days-a.days);
+  const B={b0:0,b1:0,b2:0,b3:0};all.forEach(r=>{const dd=r.days;if(dd<=15)B.b0+=r.amount;else if(dd<=30)B.b1+=r.amount;else if(dd<=60)B.b2+=r.amount;else B.b3+=r.amount;});
+  const bkt=(l,v,cls)=>`<div class="bucket ${cls}"><div class="bl">${l}</div><div class="bv num">${inr(v)}</div><div class="bc">outstanding</div></div>`;
+  const settled=(state.data.debtors||[]).filter(d=>d.settled);
+  return `<div class="topbar"><div><div class="h">Debtors</div><div class="sub">Everyone who owes you — accident cases and general / service alike</div></div><button class="btn" onclick="openDebtor()">${ic_plus} Add debtor</button></div>
+  <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+    <div class="kpi red"><div class="glow"></div><div class="ic">${ic_rupee}</div><div class="lab">In the market</div><div class="val money num">${inr(market)}</div><div class="meta">total recoverable</div></div>
+    <div class="kpi amber"><div class="glow"></div><div class="ic">${ic_truck}</div><div class="lab">Accident cases</div><div class="val money num">${inr(accDue)}</div><div class="meta">${accRows.length} vehicle${accRows.length!==1?'s':''}</div></div>
+    <div class="kpi blue"><div class="glow"></div><div class="ic">${ic_wallet}</div><div class="lab">General / service</div><div class="val money num">${inr(genDue)}</div><div class="meta">${gen.length} debtor${gen.length!==1?'s':''}</div></div>
+  </div>
+  <div class="buckets">${bkt('0–15 days',B.b0,'')}${bkt('16–30 days',B.b1,'')}${bkt('31–60 days',B.b2,'')}${bkt('60+ days',B.b3,'warn')}</div>
+  <div class="card"><div class="ch"><h3>${ic_wallet} Who owes you</h3><span class="cnt">${all.length}</span></div>
+  ${all.length?`<table class="tbl"><thead><tr><th>Name</th><th>Type</th><th>Vehicle / bill</th><th class="r">Amount</th><th class="r">Days</th><th></th></tr></thead><tbody>${all.map(r=>`<tr ${r.vid?`class="clk" onclick="go('detail','${r.vid}')"`:''}>
+    <td style="font-weight:600">${esc(r.name)}</td>
+    <td><span class="chip ${r.type==='Accident'?'amber':'blue'}">${esc(r.type)}</span></td>
+    <td style="color:var(--muted)">${esc(r.vehicle||'—')}${r.billNo?' · '+esc(r.billNo):''}</td>
+    <td class="r mono" style="color:var(--red);font-weight:700">${inr(r.amount)}</td>
+    <td class="r"><span class="agepill ${ageCls(r.days)}">${r.days}d</span></td>
+    <td class="r">${r.did?`<span class="dbact"><span onclick="event.stopPropagation();settleDebtor('${r.did}')" title="Mark collected" style="cursor:pointer;color:var(--green)">${ic_tick}</span><span onclick="event.stopPropagation();openDebtor('${r.did}')" title="Edit" style="cursor:pointer;color:var(--muted)">${ic_edit}</span><span onclick="event.stopPropagation();delDebtor('${r.did}')" title="Delete" style="cursor:pointer;color:var(--muted)">${ic_trash}</span></span>`:'<span style="color:var(--muted);font-size:11px">in vehicle →</span>'}</td>
+  </tr>`).join('')}</tbody></table>`:'<div class="lempty">No debtors yet. Accident dues show here automatically; add general / service debtors with the button above.</div>'}
+  </div>
+  ${settled.length?`<div style="font-size:12px;color:var(--muted);margin-top:14px">${settled.length} marked collected · <span onclick="state.showSettled=!state.showSettled;render()" style="cursor:pointer;color:var(--blue)">${state.showSettled?'hide':'show'}</span></div>`+(state.showSettled?`<div class="card" style="margin-top:10px"><table class="tbl"><tbody>${settled.map(d=>`<tr><td style="font-weight:600">${esc(d.name)}</td><td style="color:var(--muted)">${esc(d.note||'')}</td><td class="r mono">${inr(d.amount)}</td><td class="r"><span class="dbact"><span onclick="unsettleDebtor('${d.id}')" style="cursor:pointer;color:var(--blue);font-size:12px">restore</span><span onclick="delDebtor('${d.id}')" style="cursor:pointer;color:var(--muted)">${ic_trash}</span></span></td></tr>`).join('')}</tbody></table></div>`:''):''}`;
+}
+function openDebtor(did){const d=did?(state.data.debtors||[]).find(x=>x.id===did):{};
+  modal(did?'Edit debtor':'Add debtor',`<div class="fgrid">
+    <div class="field"><label>Customer / owner name</label><input id="db_name" value="${esc(d.name)}"></div>
+    <div class="field"><label>Phone (optional)</label><input id="db_phone" value="${esc(d.phone)}"></div>
+    <div class="field"><label>Vehicle no. (optional)</label><input id="db_vehicle" value="${esc(d.vehicle)}"></div>
+    <div class="field"><label>Bill no. (optional)</label><input id="db_bill" value="${esc(d.billNo)}"></div>
+    <div class="field"><label>Amount to recover (₹)</label><input id="db_amount" inputmode="numeric" value="${d.amount||''}"></div>
+    <div class="field"><label>Since (bill / due date)</label><input id="db_date" type="date" value="${d.date||today()}"></div>
+    <div class="field full"><label>Type / note</label><input id="db_note" value="${esc(d.note)}" placeholder="Service · Parts purchase · General"></div>
+  </div>`,()=>{const name=val('db_name');if(!name){alert('Enter a name.');return;}
+    const rec={name,phone:val('db_phone'),vehicle:val('db_vehicle'),billNo:val('db_bill'),amount:numval('db_amount'),date:val('db_date')||today(),note:val('db_note')};
+    if(did){Object.assign(d,rec);}else{state.data.debtors=state.data.debtors||[];state.data.debtors.unshift({id:id(),settled:false,ts:Date.now(),...rec});}
+    save();closeModal();render();},did?'Save':'Add debtor');}
+function delDebtor(did){if(!confirm('Delete this debtor entry?'))return;state.data.debtors=(state.data.debtors||[]).filter(d=>d.id!==did);save();render();}
+function settleDebtor(did){const d=(state.data.debtors||[]).find(x=>x.id===did);if(!d)return;if(!confirm('Mark '+inr(d.amount)+' from '+d.name+' as collected?'))return;d.settled=true;d.settledDate=today();save();render();}
+function unsettleDebtor(did){const d=(state.data.debtors||[]).find(x=>x.id===did);if(d){d.settled=false;save();render();}}
+function applyDebtor(x){state.data.debtors=state.data.debtors||[];state.data.debtors.unshift({id:id(),settled:false,ts:Date.now(),name:x.name||'Unknown',phone:x.phone||'',vehicle:x.vehicle||'',billNo:x.billNo||'',amount:Number(x.amount)||0,date:x.date||today(),note:x.note||'General'});}
 
 /* ============ detail ============ */
 function viewDetail(){
@@ -1185,16 +1239,17 @@ async function interpret(){
       if(error)throw error;aiRes=data;
     }catch(e){console.error('AI agent unavailable, using offline parser',e);}
   }
-  if(aiRes&&(aiRes.plans||aiRes.errors)){
-    window._plans=aiRes.plans||[];window._plansMode='ai';
-    renderAgentPreview(aiRes.plans||[],aiRes.errors||[],'ai',false);
+  if(aiRes&&(aiRes.plans||aiRes.errors||aiRes.debtors)){
+    window._plans=aiRes.plans||[];window._plansMode='ai';window._debtors=aiRes.debtors||[];
+    renderAgentPreview(aiRes.plans||[],aiRes.errors||[],'ai',false,aiRes.debtors||[]);
   } else {
-    const local=parseAgent(text);window._plans=local.plans;window._plansMode='local';
-    renderAgentPreview(local.plans,local.errors,'local',true);
+    const local=parseAgent(text);window._plans=local.plans;window._plansMode='local';window._debtors=[];
+    renderAgentPreview(local.plans,local.errors,'local',true,[]);
   }
 }
-function renderAgentPreview(plans,errors,mode,offline){
+function renderAgentPreview(plans,errors,mode,offline,debtors){
   const pv=document.getElementById('cmdPreview'),applyBtn=document.getElementById('applyBtn');
+  debtors=debtors||[];
   let html='';
   if(errors&&errors.length)html+=errors.map(e=>`<div class="verdict bad" style="margin-bottom:10px"><div class="vi">${ic_alert}</div><div class="vt"><b>${esc(e)}</b></div></div>`).join('');
   if(plans&&plans.length){
@@ -1204,16 +1259,22 @@ function renderAgentPreview(plans,errors,mode,offline){
       else{who=p.isNew?('New vehicle '+esc(p.newReg||'')):(esc(p.target.reg)+(p.target.model?' — '+esc(p.target.model):''));summary=p.summary||[];}
       return `<div class="verdict info" style="margin-bottom:10px"><div class="vi">${ic_scale}</div><div class="vt"><b>${who}</b><ul style="margin:8px 0 0;padding-left:18px">${summary.map(s=>`<li style="font-size:13px;color:var(--text2);margin-top:4px">${esc(s)}</li>`).join('')}</ul></div></div>`;
     }).join('');
-    html+=`<div style="font-size:12px;color:var(--muted);margin-top:2px">${plans.length} vehicle${plans.length>1?'s':''} will be updated.${offline?' <span style="color:var(--amber)">(offline mode — AI unavailable, using basic parser)</span>':''} Check, then Apply.</div>`;
-  } else if(!errors||!errors.length){html+=`<div class="verdict info"><div class="vi">${ic_scale}</div><div class="vt"><b>Nothing recognised to change — try rephrasing.</b></div></div>`;}
+  }
+  if(debtors.length){
+    html+=debtors.map(d=>`<div class="verdict info" style="margin-bottom:10px"><div class="vi">${ic_users}</div><div class="vt"><b>Debtor — ${esc(d.name||'Unknown')}</b><ul style="margin:8px 0 0;padding-left:18px"><li style="font-size:13px;color:var(--text2)">${inr(d.amount)} to recover${d.note?(' · '+esc(d.note)):''}${d.vehicle?(' · '+esc(d.vehicle)):''}${d.billNo?(' · bill '+esc(d.billNo)):''}</li></ul></div></div>`).join('');
+  }
+  const total=(plans?plans.length:0)+debtors.length;
+  if(total){html+=`<div style="font-size:12px;color:var(--muted);margin-top:2px">${total} item${total>1?'s':''} to apply.${offline?' <span style="color:var(--amber)">(offline mode — basic parser)</span>':''} Check, then Apply.</div>`;}
+  else if(!errors||!errors.length){html+=`<div class="verdict info"><div class="vi">${ic_scale}</div><div class="vt"><b>Nothing recognised — try rephrasing.</b></div></div>`;}
   pv.innerHTML=html;
-  applyBtn.style.display=(plans&&plans.length)?'inline-flex':'none';
-  applyBtn.textContent=(plans&&plans.length>1)?('Apply to '+plans.length+' vehicles'):'Apply changes';
+  applyBtn.style.display=total?'inline-flex':'none';
+  applyBtn.textContent=total>1?('Apply '+total+' updates'):'Apply changes';
 }
 function applyCurrent(){
-  const plans=(window._plans||[]);if(!plans.length)return;
+  const plans=(window._plans||[]),debtors=(window._debtors||[]);if(!plans.length&&!debtors.length)return;
   let firstId=null;plans.forEach(p=>{const vid=(window._plansMode==='ai')?applyAIPlan(p):applyPlanSilent(p);if(!firstId&&vid)firstId=vid;});
-  save();closeModal();if(firstId)go('detail',firstId);else render();
+  debtors.forEach(applyDebtor);
+  save();closeModal();if(firstId)go('detail',firstId);else if(debtors.length)go('debtors');else render();
 }
 function applyAIPlan(plan){
   let v=(!plan.isNew&&plan.match)?veh(plan.match):null;
@@ -1274,6 +1335,7 @@ const ic_camera=ico('<path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4
 const ic_mic=ico('<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0M12 17v4M8 21h8"/>');
 const ic_sparkle=ico('<path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5 10.1 7.6z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>');
 const ic_bulb=ico('<path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.7.7 1 1.2 1 2.5h6c0-1.3.3-1.8 1-2.5A6 6 0 0012 3z"/>');
+const ic_users=ico('<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>');
 
 init();
 </script>
