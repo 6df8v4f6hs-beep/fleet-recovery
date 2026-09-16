@@ -489,6 +489,7 @@ function navItems(){return [
   ['advisor','Advisor',ic_bulb],
   ['debtors','Debtors',ic_users],
   ['investment','Investment',ic_coins],
+  ['advances','Advances',ic_advance],
 ];}
 function renderNav(){
   const due=state.data.vehicles.reduce((s,v)=>s+(totals(v).due>0?1:0),0);
@@ -511,6 +512,7 @@ function render(){
   else if(state.view==='advisor')el.innerHTML=viewAdvisor();
   else if(state.view==='debtors')el.innerHTML=viewDebtors();
   else if(state.view==='investment')el.innerHTML=viewInvestment();
+  else if(state.view==='advances')el.innerHTML=viewAdvances();
   else if(state.view==='detail'){el.innerHTML=viewDetail();requestAnimationFrame(animateBars);}
 }
 document.getElementById('view').addEventListener('click',e=>{const tb=e.target.closest('#tabs button');if(tb){state.tab=tb.dataset.tab;render()}});
@@ -779,6 +781,33 @@ function viewInvestment(){
   ${withInv.length?`<div style="text-align:right;font-family:'Space Grotesk';font-size:16px;font-weight:700;margin-top:6px">Investment yet to be realized: <span style="color:var(--red)">${inr(total)}</span></div>`:''}`;
 }
 
+/* ============ advances ============ */
+function viewAdvances(){
+  const withAdv=state.data.vehicles.map(v=>({v,adv:(v.payments||[]).filter(p=>p.advance)})).filter(x=>x.adv.length);
+  const total=withAdv.reduce((s,x)=>s+x.adv.reduce((a,p)=>a+Number(p.amount||0),0),0);
+  const entries=withAdv.reduce((s,x)=>s+x.adv.length,0);
+  return `<div class="topbar"><div><div class="h">Advances</div><div class="sub">Money customers have paid upfront, before final billing</div></div><button class="btn" onclick="openAdvance()">${ic_plus} Add advance</button></div>
+  <div class="kpis" style="grid-template-columns:repeat(2,1fr)">
+    <div class="kpi green"><div class="glow"></div><div class="ic">${ic_rupee}</div><div class="lab">Total advances received</div><div class="val money num">${inr(total)}</div><div class="meta">across ${withAdv.length} vehicle${withAdv.length!==1?'s':''}</div></div>
+    <div class="kpi blue"><div class="glow"></div><div class="ic">${ic_wallet}</div><div class="lab">Entries</div><div class="val num">${entries}</div><div class="meta">advance payments</div></div>
+  </div>
+  ${withAdv.length?withAdv.map(({v,adv})=>{const tot=adv.reduce((a,p)=>a+Number(p.amount||0),0);return `<div class="card" style="margin-bottom:14px"><div class="ch"><h3 style="gap:12px"><span class="plate">${esc(v.reg)||'—'}</span> ${esc(v.model||'')} <span style="color:var(--muted);font-weight:400;font-size:13px">${esc(v.customer||'')}</span></h3><span class="cnt">${inr(tot)} advance</span></div>
+    <table class="tbl"><tbody>${adv.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>`<tr><td class="mono" style="color:var(--muted)">${fdate(p.date)}</td><td>${esc(p.ref||'Advance')} <span style="color:var(--muted)">· ${esc(p.mode||'')}</span></td><td class="r mono" style="color:var(--green)">${inr(p.amount)}</td><td class="r"><span class="dbact"><span onclick="delAdvance('${v.id}','${p.id}')" style="cursor:pointer;color:var(--muted)">${ic_trash}</span></span></td></tr>`).join('')}</tbody></table></div>`;}).join(''):'<div class="card"><div class="lempty">No advances recorded yet. Use “Add advance” to log money a customer paid upfront for their vehicle.</div></div>'}`;
+}
+function openAdvance(){
+  if(!state.data.vehicles.length){alert('Add a vehicle first, then you can record an advance against it.');return;}
+  const vopts=state.data.vehicles.map(v=>`<option value="${v.id}">${esc(v.reg||'(no reg)')}${v.model?' — '+esc(v.model):''}${v.customer?' ('+esc(v.customer)+')':''}</option>`).join('');
+  modal('Add advance',`<div class="fgrid">
+    <div class="field full"><label>Vehicle</label><select id="ad_vid">${vopts}</select></div>
+    <div class="field"><label>Advance amount (₹)</label><input id="ad_amt" inputmode="numeric"></div>
+    <div class="field"><label>Date</label><input id="ad_date" type="date" value="${today()}"></div>
+    <div class="field"><label>Mode</label><select id="ad_mode"><option>Cash</option><option>UPI</option><option>NEFT</option><option>Cheque</option></select></div>
+    <div class="field"><label>Note / ref</label><input id="ad_ref" placeholder="Advance"></div>
+  </div>`,()=>{const v=veh(val('ad_vid'));if(!v){alert('Pick a vehicle.');return;}const amt=numval('ad_amt');if(!amt){alert('Enter an amount.');return;}
+    v.payments=v.payments||[];v.payments.push({id:id(),payer:'Customer',amount:amt,mode:val('ad_mode'),date:val('ad_date')||today(),ref:val('ad_ref')||'Advance',advance:true});
+    addLog(v,'Advance received — '+inr(amt),val('ad_date')||today(),'auto');autoDeliver(v);save();closeModal();go('advances');},'Add advance');}
+function delAdvance(vid,pid){const v=veh(vid);if(!v)return;if(!confirm('Delete this advance entry?'))return;v.payments=v.payments.filter(p=>p.id!==pid);save();render();}
+
 /* ============ detail ============ */
 function viewDetail(){
   const v=veh(state.vid);if(!v)return '';
@@ -826,7 +855,7 @@ function renderTab(v){
   if(state.tab==='payments'){
     const rows=(v.payments||[]).map(p=>`<div class="lrow" style="grid-template-columns:auto 1fr 130px 110px 34px">
       <span class="paytag ${p.payer==='Insurance'?'ins':'cust'}">${esc(p.payer)}</span>
-      <div class="muted">${esc(p.mode)} · ${esc(p.ref)||'—'}</div>
+      <div class="muted">${p.advance?'<span class="chip green" style="padding:2px 8px;font-size:10px;margin-right:6px">Advance</span>':''}${esc(p.mode)} · ${esc(p.ref)||'—'}</div>
       <div class="muted num" style="text-align:right">${fdate(p.date)}</div>
       <div class="mono" style="color:var(--green)">${inr(p.amount)}</div>
       <button class="del" onclick="delChild('${v.id}','payments','${p.id}')">${ic_trash}</button></div>`).join('');
@@ -1197,7 +1226,7 @@ function applyClauseTo(plan,cl){
     return {acted,simpleVerb};
   }
   if(/\border|\bspare|\bpart|purchase|bought\b/.test(c)){const it=extractItem(cl)||'Parts';plan.orders.push({item:it,amount:amt||0,date:date||today()});plan.summary.push('Add order — '+it+(amt?(' · '+inr(amt)):'')+' · '+fdate(date||today()));return {acted:true,simpleVerb:null};}
-  if(/paid|payment|received|remitt/.test(c)&&amt){const payer=/insur/.test(c)?'Insurance':'Customer',mode=/upi/.test(c)?'UPI':/neft/.test(c)?'NEFT':/cheque|check/.test(c)?'Cheque':'Cash';plan.payments.push({payer,amount:amt,date:date||today(),mode,ref:''});plan.summary.push('Record payment — '+inr(amt)+' from '+payer+' · '+fdate(date||today()));return {acted:true,simpleVerb:null};}
+  if(/paid|payment|received|remitt|advance/.test(c)&&amt){const payer=/insur/.test(c)?'Insurance':'Customer',mode=/upi/.test(c)?'UPI':/neft/.test(c)?'NEFT':/cheque|check/.test(c)?'Cheque':'Cash',isAdv=/advance/.test(c);plan.payments.push({payer,amount:amt,date:date||today(),mode,ref:isAdv?'Advance':'',advance:isAdv});plan.summary.push((isAdv?'Advance received — ':'Record payment — ')+inr(amt)+' from '+payer+' · '+fdate(date||today()));return {acted:true,simpleVerb:null};}
   if(/bill/.test(c)&&amt){plan.changes.billed=amt;if(date)plan.changes.billDate=date;plan.summary.push('Set billed — '+inr(amt));return {acted:true,simpleVerb:null};}
   if(/estimat/.test(c)&&amt){plan.changes.estimate=amt;plan.summary.push('Set estimate — '+inr(amt));return {acted:true,simpleVerb:null};}
   if(/enter|intake|came in|workshop|arriv/.test(c)){plan.changes.entry=date||today();plan.summary.push('Intake — '+fdate(date||today()));acted=true;simpleVerb='entered';}
@@ -1243,7 +1272,7 @@ function applyPlanSilent(plan){
   if(!v)return null;
   Object.assign(v,plan.changes);
   (plan.orders||[]).forEach(o=>{v.orders=v.orders||[];v.orders.push({id:id(),item:o.item,vendor:'',amount:o.amount,date:o.date});});
-  (plan.payments||[]).forEach(p=>{v.payments=v.payments||[];v.payments.push({id:id(),payer:p.payer,amount:p.amount,date:p.date,mode:p.mode||'Cash',ref:p.ref||''});});
+  (plan.payments||[]).forEach(p=>{v.payments=v.payments||[];v.payments.push({id:id(),payer:p.payer,amount:p.amount,date:p.date,mode:p.mode||'Cash',ref:p.ref||'',advance:!!p.advance});});
   logFromApply(v,plan);
   autoDeliver(v);
   return v.id;
@@ -1340,7 +1369,7 @@ function applyAIPlan(plan){
   if(f.status)addLog(v,'Status → '+f.status,today(),'auto');
   if(f.billed!==undefined&&f.billed!==''&&f.billed!==null)addLog(v,'Bill raised — '+inr(f.billed),f.billDate||today(),'auto');
   (plan.orders||[]).forEach(o=>{v.orders=v.orders||[];v.orders.push({id:id(),item:o.item||'Parts',vendor:o.vendor||'',amount:Number(o.amount)||0,date:o.date||today()});addLog(v,'Ordered '+(o.item||'parts')+(o.amount?(' — '+inr(o.amount)):''),o.date||today(),'auto');});
-  (plan.payments||[]).forEach(p=>{v.payments=v.payments||[];v.payments.push({id:id(),payer:p.payer||'Customer',amount:Number(p.amount)||0,mode:p.mode||'Cash',date:p.date||today(),ref:p.ref||''});addLog(v,'Payment — '+inr(p.amount)+' from '+(p.payer||'Customer'),p.date||today(),'auto');});
+  (plan.payments||[]).forEach(p=>{const isAdv=/advance/i.test((p.ref||'')+' '+(p.note||''));v.payments=v.payments||[];v.payments.push({id:id(),payer:p.payer||'Customer',amount:Number(p.amount)||0,mode:p.mode||'Cash',date:p.date||today(),ref:p.ref||(isAdv?'Advance':''),advance:isAdv});addLog(v,(isAdv?'Advance received — ':'Payment — ')+inr(p.amount)+' from '+(p.payer||'Customer'),p.date||today(),'auto');});
   if(plan.settle){const due=totals(v).due;if(due>0){v.payments.push({id:id(),payer:'Customer',amount:due,mode:'Cash',date:today(),ref:'settlement'});addLog(v,'Settled — '+inr(due),today(),'auto');}}
   (plan.notes||[]).forEach(n=>{if(n&&String(n).trim())addLog(v,String(n).trim(),today(),'note');});
   autoDeliver(v);
@@ -1391,6 +1420,7 @@ const ic_sparkle=ico('<path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5
 const ic_bulb=ico('<path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.7.7 1 1.2 1 2.5h6c0-1.3.3-1.8 1-2.5A6 6 0 0012 3z"/>');
 const ic_users=ico('<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>');
 const ic_coins=ico('<ellipse cx="8" cy="6" rx="6" ry="3"/><path d="M2 6v6c0 1.7 2.7 3 6 3s6-1.3 6-3V6"/><path d="M2 12v6c0 1.7 2.7 3 6 3 1.4 0 2.8-.3 3.8-.7"/><circle cx="17" cy="15" r="5"/>');
+const ic_advance=ico('<path d="M12 3v10M8 9l4 4 4-4"/><path d="M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"/>');
 
 init();
 </script>
