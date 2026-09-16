@@ -405,7 +405,7 @@ async function save(silent){
   if(SB){try{const {error}=await SB.from('app_state').upsert({id:'main',data:state.data,updated_at:new Date().toISOString()});if(error)throw error;flashSaved(silent);}catch(e){console.error('save failed',e);flashSaved(silent,true);}}
   else{try{await window.storage.set(KEY,JSON.stringify(state.data));flashSaved(silent);}catch(e){console.error(e);}}
 }
-async function init(){if(SB){try{const {data:{session}}=await SB.auth.getSession();if(session)afterAuth();else showLogin();}catch(e){showLogin();}}else{load();}}
+async function init(){if(SB){try{SB.auth.onAuthStateChange((event)=>{if(event==='PASSWORD_RECOVERY')showNewPassword();});}catch(e){}try{const {data:{session}}=await SB.auth.getSession();if(session)afterAuth();else showLogin();}catch(e){showLogin();}}else{load();}}
 function afterAuth(){const b=document.getElementById('signout');if(b)b.style.display='block';load();}
 function doSignOut(){if(SB)SB.auth.signOut().then(()=>location.reload());}
 function showLogin(){
@@ -414,14 +414,41 @@ function showLogin(){
     <div class="mbody">
       <div class="field full" style="margin-bottom:14px"><label>Email</label><input id="li_email" type="email" autocomplete="username"></div>
       <div class="field full"><label>Password</label><input id="li_pass" type="password" autocomplete="current-password"></div>
-      <div id="li_err" style="color:var(--red);font-size:12.5px;margin-top:12px;display:none"></div>
+      <div style="margin-top:10px;text-align:right"><span onclick="forgotPassword()" style="cursor:pointer;color:var(--blue);font-size:12.5px;font-weight:600">Forgot password?</span></div>
+      <div id="li_err" style="font-size:12.5px;margin-top:10px;display:none"></div>
     </div>
     <div class="mfoot"><button class="btn" id="li_btn" style="width:100%;justify-content:center">Sign in</button></div></div></div>`;
   const btn=document.getElementById('li_btn');
   const doLogin=async()=>{btn.textContent='Signing in…';const {error}=await SB.auth.signInWithPassword({email:val('li_email'),password:document.getElementById('li_pass').value});
-    if(error){const el=document.getElementById('li_err');el.style.display='block';el.textContent=error.message;btn.textContent='Sign in';}else{closeModal();afterAuth();}};
+    if(error){const el=document.getElementById('li_err');el.style.display='block';el.style.color='var(--red)';el.textContent=error.message;btn.textContent='Sign in';}else{closeModal();afterAuth();}};
   btn.addEventListener('click',doLogin);
   document.getElementById('li_pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+}
+async function forgotPassword(){
+  const emailEl=document.getElementById('li_email'),hint=document.getElementById('li_err');
+  const email=(emailEl?emailEl.value:'').trim();
+  if(!email){hint.style.display='block';hint.style.color='var(--amber)';hint.textContent='Type your email above first, then tap Forgot password.';return;}
+  try{
+    const redirectTo=window.location.origin+window.location.pathname;
+    const {error}=await SB.auth.resetPasswordForEmail(email,{redirectTo});
+    if(error)throw error;
+    hint.style.display='block';hint.style.color='var(--green)';hint.textContent='Reset link sent to '+email+'. Open it on this device to set a new password.';
+  }catch(e){hint.style.display='block';hint.style.color='var(--red)';hint.textContent=e.message||'Could not send the reset email.';}
+}
+function showNewPassword(){
+  document.getElementById('modal-root').innerHTML=`<div class="scrim"><div class="modal" style="max-width:390px">
+    <div class="mh"><h3>Set a new password</h3></div>
+    <div class="mbody">
+      <div class="field full"><label>New password</label><input id="np_pass" type="password" autocomplete="new-password"></div>
+      <div id="np_err" style="color:var(--red);font-size:12.5px;margin-top:12px;display:none"></div>
+    </div>
+    <div class="mfoot"><button class="btn" id="np_btn" style="width:100%;justify-content:center">Save new password</button></div></div></div>`;
+  document.getElementById('np_btn').addEventListener('click',async()=>{
+    const pass=document.getElementById('np_pass').value,err=document.getElementById('np_err');
+    if(!pass||pass.length<6){err.style.display='block';err.textContent='Use at least 6 characters.';return;}
+    const {error}=await SB.auth.updateUser({password:pass});
+    if(error){err.style.display='block';err.textContent=error.message;}else{closeModal();afterAuth();}
+  });
 }
 
 /* ============ helpers ============ */
@@ -443,6 +470,7 @@ function daysInShop(v){if(v.actDelivery&&v.entry)return Math.max(0,Math.floor((n
 function recvDays(v){const base=v.billDate||v.actDelivery||v.expDelivery||v.entry;return daysSince(base)}
 function capitalBlocked(v){const t=totals(v);const blocked=Math.max(0,t.ordered-t.received);const dates=(v.orders||[]).map(o=>o.date).filter(Boolean).sort();const since=dates[0]||'';return {blocked,days:since?daysSince(since):0,since};}
 function receivedBy(v,payer){return (v.payments||[]).filter(p=>p.payer===payer).reduce((s,p)=>s+Number(p.amount||0),0);}
+function autoDeliver(v){if(v.status==='Closed / Delivered')return;const t=totals(v);if(t.billed>0&&t.received>=t.billed){v.status='Closed / Delivered';if(!v.actDelivery)v.actDelivery=today();addLog(v,'Auto-delivered — full payment received',today(),'auto');}}
 function ageCls(d){return d<=15?'a0':d<=30?'a1':d<=60?'a2':'a3'}
 function insurerName(v){return v.claimType==='Cash'?'Cash / Direct':(v.insurer||'Unspecified')}
 function moneyBadge(v){const t=totals(v);
@@ -460,6 +488,7 @@ function navItems(){return [
   ['aging','Aging',ic_hour],
   ['advisor','Advisor',ic_bulb],
   ['debtors','Debtors',ic_users],
+  ['investment','Investment',ic_coins],
 ];}
 function renderNav(){
   const due=state.data.vehicles.reduce((s,v)=>s+(totals(v).due>0?1:0),0);
@@ -481,6 +510,7 @@ function render(){
   else if(state.view==='aging')el.innerHTML=viewAging();
   else if(state.view==='advisor')el.innerHTML=viewAdvisor();
   else if(state.view==='debtors')el.innerHTML=viewDebtors();
+  else if(state.view==='investment')el.innerHTML=viewInvestment();
   else if(state.view==='detail'){el.innerHTML=viewDetail();requestAnimationFrame(animateBars);}
 }
 document.getElementById('view').addEventListener('click',e=>{const tb=e.target.closest('#tabs button');if(tb){state.tab=tb.dataset.tab;render()}});
@@ -727,6 +757,28 @@ function settleDebtor(did){const d=(state.data.debtors||[]).find(x=>x.id===did);
 function unsettleDebtor(did){const d=(state.data.debtors||[]).find(x=>x.id===did);if(d){d.settled=false;save();render();}}
 function applyDebtor(x){state.data.debtors=state.data.debtors||[];state.data.debtors.unshift({id:id(),settled:false,ts:Date.now(),name:x.name||'Unknown',phone:x.phone||'',vehicle:x.vehicle||'',billNo:x.billNo||'',amount:Number(x.amount)||0,date:x.date||today(),note:x.note||'General'});}
 
+/* ============ investment yet to be realized ============ */
+function viewInvestment(){
+  const pending=state.data.vehicles.filter(isActive);
+  const rows=pending.map(v=>{const orders=(v.orders||[]).slice().sort((a,b)=>(a.date||'').localeCompare(b.date||''));const inv=orders.reduce((s,o)=>s+Number(o.amount||0),0);return {v,orders,inv};});
+  const withInv=rows.filter(r=>r.inv>0).sort((a,b)=>b.inv-a.inv);
+  const total=withInv.reduce((s,r)=>s+r.inv,0);
+  const oldest=pending.length?Math.max(...pending.map(v=>daysInShop(v))):0;
+  return `<div class="topbar"><div><div class="h">Investment Yet to Be Realized</div><div class="sub">Capital tied up in vehicles not yet completed</div></div></div>
+  <div class="kpis" style="grid-template-columns:repeat(3,1fr)">
+    <div class="kpi red"><div class="glow"></div><div class="ic">${ic_coins}</div><div class="lab">Blocked capital</div><div class="val money num">${inr(total)}</div><div class="meta">across ${withInv.length} vehicle${withInv.length!==1?'s':''}</div></div>
+    <div class="kpi blue"><div class="glow"></div><div class="ic">${ic_truck}</div><div class="lab">Pending vehicles</div><div class="val num">${pending.length}</div><div class="meta">not yet delivered</div></div>
+    <div class="kpi amber"><div class="glow"></div><div class="ic">${ic_clock}</div><div class="lab">Longest in shop</div><div class="val num">${oldest}<span style="font-size:15px"> d</span></div><div class="meta">days</div></div>
+  </div>
+  ${withInv.length?withInv.map(({v,orders,inv})=>`
+    <div class="card" style="margin-bottom:14px"><div class="ch"><h3 style="gap:12px"><span class="plate">${esc(v.reg)||'—'}</span> ${esc(v.model||'')} <span class="chip ${STATUS_CLASS[v.status]||'slate'}" style="margin-left:4px">${esc(v.status)}</span></h3><span class="cnt">${inr(inv)} invested</span></div>
+    <table class="tbl"><thead><tr><th>Part / item</th><th>Date</th><th class="r">Amount</th></tr></thead><tbody>
+      ${orders.map(o=>`<tr><td>${esc(o.item||'Parts')}${o.vendor?' <span style="color:var(--muted)">· '+esc(o.vendor)+'</span>':''}</td><td class="mono" style="color:var(--muted)">${fdate(o.date)}</td><td class="r mono">${inr(o.amount)}</td></tr>`).join('')}
+      <tr><td colspan="2" style="font-weight:700">Total invested — ${esc(v.customer||'')}</td><td class="r mono" style="font-weight:700;color:var(--amber)">${inr(inv)}</td></tr>
+    </tbody></table></div>`).join(''):'<div class="card"><div class="lempty">No investment in pending vehicles yet. Parts ordered on vehicles not yet delivered will appear here.</div></div>'}
+  ${withInv.length?`<div style="text-align:right;font-family:'Space Grotesk';font-size:16px;font-weight:700;margin-top:6px">Investment yet to be realized: <span style="color:var(--red)">${inr(total)}</span></div>`:''}`;
+}
+
 /* ============ detail ============ */
 function viewDetail(){
   const v=veh(state.vid);if(!v)return '';
@@ -875,7 +927,7 @@ function openVehicle(vid){
   </div>`,()=>{
     const rec={job:val('f_job'),reg:val('f_reg'),model:val('f_model'),status:val('f_status'),customer:val('f_customer'),phone:val('f_phone'),claimType:val('f_claimType'),insurer:val('f_insurer'),policy:val('f_policy'),claim:val('f_claim'),entry:val('f_entry'),docs:val('f_docs'),permission:val('f_permission'),expDelivery:val('f_expDelivery'),actDelivery:val('f_actDelivery'),billDate:val('f_billDate'),estimate:numval('f_estimate'),billed:numval('f_billed'),remarks:val('f_remarks')};
     if(!rec.reg&&!rec.model){alert('Add at least a registration number or model.');return}
-    if(vid){Object.assign(v,rec)}else{const nv={id:id(),orders:[],payments:[],documents:[],photos:[],log:[],...rec};nv.log.push({id:id(),date:today(),text:'Vehicle record created',kind:'auto',ts:Date.now()});state.data.vehicles.unshift(nv);}
+    if(vid){Object.assign(v,rec);autoDeliver(v);}else{const nv={id:id(),orders:[],payments:[],documents:[],photos:[],log:[],...rec};nv.log.push({id:id(),date:today(),text:'Vehicle record created',kind:'auto',ts:Date.now()});state.data.vehicles.unshift(nv);}
     save();closeModal();if(!vid){state.view='detail';state.vid=state.data.vehicles[0].id;state.tab='orders'}render();
   },vid?'Save changes':'Add vehicle');
 }
@@ -891,7 +943,7 @@ function openPayment(vid){modal('Record payment',`<div class="fgrid">
   <div class="field"><label>Mode</label><select id="p_mode"><option>Cash</option><option>Cheque</option><option>NEFT</option><option>UPI</option></select></div>
   <div class="field"><label>Date</label><input id="p_date" type="date" value="${today()}"></div>
   <div class="field full"><label>Reference</label><input id="p_ref" placeholder="UTR / cheque no."></div></div>`,()=>{
-  const v=veh(vid);v.payments=v.payments||[];const p={id:id(),payer:val('p_payer'),amount:numval('p_amount'),mode:val('p_mode'),date:val('p_date'),ref:val('p_ref')};v.payments.push(p);addLog(v,'Payment — '+inr(p.amount)+' from '+p.payer+' ('+p.mode+')',p.date,'auto');save();closeModal();render();},'Record payment');}
+  const v=veh(vid);v.payments=v.payments||[];const p={id:id(),payer:val('p_payer'),amount:numval('p_amount'),mode:val('p_mode'),date:val('p_date'),ref:val('p_ref')};v.payments.push(p);addLog(v,'Payment — '+inr(p.amount)+' from '+p.payer+' ('+p.mode+')',p.date,'auto');autoDeliver(v);save();closeModal();render();},'Record payment');}
 function openDoc(vid){const types=["RC","Insurance Policy","Driving Licence","Claim Intimation","Survey Report","Estimate","FIR / Police Report","Before Photos","After Photos","Final Bill","Payment Proof","Other"];
   modal('Add document',`<div class="fgrid">
   <div class="field"><label>Document type</label><select id="d_type">${types.map(t=>`<option>${t}</option>`).join('')}</select></div>
@@ -1193,6 +1245,7 @@ function applyPlanSilent(plan){
   (plan.orders||[]).forEach(o=>{v.orders=v.orders||[];v.orders.push({id:id(),item:o.item,vendor:'',amount:o.amount,date:o.date});});
   (plan.payments||[]).forEach(p=>{v.payments=v.payments||[];v.payments.push({id:id(),payer:p.payer,amount:p.amount,date:p.date,mode:p.mode||'Cash',ref:p.ref||''});});
   logFromApply(v,plan);
+  autoDeliver(v);
   return v.id;
 }
 function addLog(v,text,date,kind){v.log=v.log||[];v.log.push({id:id(),date:date||today(),text:text,kind:kind||'auto',ts:Date.now()+Math.random()});}
@@ -1290,6 +1343,7 @@ function applyAIPlan(plan){
   (plan.payments||[]).forEach(p=>{v.payments=v.payments||[];v.payments.push({id:id(),payer:p.payer||'Customer',amount:Number(p.amount)||0,mode:p.mode||'Cash',date:p.date||today(),ref:p.ref||''});addLog(v,'Payment — '+inr(p.amount)+' from '+(p.payer||'Customer'),p.date||today(),'auto');});
   if(plan.settle){const due=totals(v).due;if(due>0){v.payments.push({id:id(),payer:'Customer',amount:due,mode:'Cash',date:today(),ref:'settlement'});addLog(v,'Settled — '+inr(due),today(),'auto');}}
   (plan.notes||[]).forEach(n=>{if(n&&String(n).trim())addLog(v,String(n).trim(),today(),'note');});
+  autoDeliver(v);
   return v.id;
 }
 function setMic(on){_micOn=on;const b=document.getElementById('micBtn'),h=document.getElementById('cmdHint');if(b){b.style.background=on?'var(--red)':'';b.style.color=on?'#fff':'';}if(h)h.textContent=on?'Listening… speak now, it stops when you pause':'';}
@@ -1336,6 +1390,7 @@ const ic_mic=ico('<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10
 const ic_sparkle=ico('<path d="M12 3l1.9 4.6L18.5 9.5 13.9 11.4 12 16l-1.9-4.6L5.5 9.5 10.1 7.6z"/><path d="M19 15l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>');
 const ic_bulb=ico('<path d="M9 18h6M10 21h4M12 3a6 6 0 00-4 10.5c.7.7 1 1.2 1 2.5h6c0-1.3.3-1.8 1-2.5A6 6 0 0012 3z"/>');
 const ic_users=ico('<path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>');
+const ic_coins=ico('<ellipse cx="8" cy="6" rx="6" ry="3"/><path d="M2 6v6c0 1.7 2.7 3 6 3s6-1.3 6-3V6"/><path d="M2 12v6c0 1.7 2.7 3 6 3 1.4 0 2.8-.3 3.8-.7"/><circle cx="17" cy="15" r="5"/>');
 
 init();
 </script>
